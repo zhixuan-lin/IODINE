@@ -1,0 +1,27 @@
+EXP:
+  NAME: 'vae'
+MODEL:
+  NAME: "VAE"
+  DEVICE: "cpu"
+  PARALLEL: False
+  DEVICE_IDS: []
+DATASET:
+  TRAIN: "MNIST"
+  VAL: "MNIST"
+  TEST: "MNIST"
+TRAIN:
+  RESUME: True
+  # per epoch
+  CHECKPOINT_PERIOD: 10
+  BATCH_SIZE: 32
+  MAX_EPOCHS: 1000
+  BASE_LR: 1e-4
+  WEIGHT_DECAY: 0.0005
+  PRINT_EVERY: 100
+  VAL_EVERY: 1000
+
+TENSORBOARD:
+  IS_ON: True
+  TARGETS:
+    SCALAR: ["loss", 'kl', 'bce']
+    IMAGE: ['image', 'pred', 'gen']
