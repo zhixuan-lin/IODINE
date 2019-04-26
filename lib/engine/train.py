@@ -2,6 +2,7 @@
 import torch
 import time
 from lib.utils.metric_logger import MetricLogger
+from lib.engine.eval import evaluate
 import datetime
 
 def train(
@@ -12,7 +13,9 @@ def train(
     params,
     checkpointer=None,
     tensorboard=None,
-    getter=None
+    getter=None,
+    dataloader_val=None,
+    evaluator=None
 ):
     """
     :param params:
@@ -24,8 +27,8 @@ def train(
     # get parameters
     max_epochs = params.get('max_epochs')
     print_every = params.get('print_every', 100)
-    val_every = params.get('val_every', 100)
-    checkpoint_period = params.get('checkpoint_period')
+    # val_every = params.get('val_every', 100)
+    # checkpoint_period = params.get('checkpoint_period')
     
     # start from where we left
     start_epoch = 0
@@ -38,6 +41,7 @@ def train(
 
     print('Start training')
     for epoch in range(start_epoch, max_epochs):
+        epoch = epoch + 1
         model.train()
         
         for iter, data in enumerate(dataloader):
@@ -90,3 +94,7 @@ def train(
         if checkpointer is not None:
             checkpointer.args['epoch'] = epoch
             checkpointer.save('model_{:04d}'.format(epoch))
+            
+        if dataloader_val is not None and evaluator is not None:
+            evaluate(model, device, dataloader_val, evaluator)
+            tensorboard.update(**evaluator.get_result_dict())

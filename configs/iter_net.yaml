@@ -1,7 +1,7 @@
 EXP:
-  NAME: 'vae'
+  NAME: 'iter_net'
 MODEL:
-  NAME: "VAE"
+  NAME: "Iter"
   DEVICE: "cuda"
   PARALLEL: False
   DEVICE_IDS: []
@@ -26,5 +26,6 @@ VAL:
 TENSORBOARD:
   IS_ON: True
   TARGETS:
-    SCALAR: ["loss", 'kl', 'bce', 'elbo', 'log_px']
+    SCALAR: ["loss", 'kl', 'bce', 'elbo', 'log_px',
+             'log_mean_grad_mag', 'log_var_log_grad_mag']
     IMAGE: ['image', 'pred', 'gen']

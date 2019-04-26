@@ -7,6 +7,7 @@ if not '.' in sys.path:
     
 from lib.config.parse import parse
 from lib.data import make_dataloader
+from lib.eval import make_evaluator
 from lib.modeling import make_model
 from lib.solver import make_optimizer, make_scheduler
 from lib.engine.train import train
@@ -57,10 +58,10 @@ def train_net(cfg):
         getter = make_getter(cfg)
     
     # validation
-    # dataloader_val, evaluator = None, None
-    # if cfg.VAL.IS_ON:
-    #     dataloader_val = make_dataloader(cfg, 'val')
-    #     evaluator = make_evaulator(cfg, 'val')
+    dataloader_val, evaluator = None, None
+    if cfg.VAL.IS_ON:
+        dataloader_val = make_dataloader(cfg, 'val')
+        evaluator = make_evaluator(cfg)
     # training parameters
     params = {
         'max_epochs': cfg.TRAIN.MAX_EPOCHS,
@@ -77,7 +78,9 @@ def train_net(cfg):
         params,
         checkpointer=checkpointer,
         tensorboard=tensorboard,
-        getter=getter
+        getter=getter,
+        dataloader_val=dataloader_val,
+        evaluator=evaluator
     )
     
     return model
