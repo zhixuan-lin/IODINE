@@ -3,17 +3,26 @@ from torch import nn
 from torch.nn import functional as F
 from torch.distributions.normal import Normal
 from lib.utils.vis_logger import logger
+from lib.modeling.modules import MultiLayerPerceptron, Dense
 
 
-class IterNet(nn.Module):
-    def __init__(self, dim_in, dim_latent, n_iters=5):
+class IterNetV12(nn.Module):
+    def __init__(self, dim_in, dim_latent, n_iters=12):
+        """
+        Gate, no input, highway, 12 iters
+        :param dim_in:
+        :param dim_latent:
+        :param n_iters:
+        """
         nn.Module.__init__(self)
         self.dim_in = dim_in
         self.dim_latent = dim_latent
         self.n_iters = n_iters
-        self.encoder = MLP(self.input_size(), 256, 256, 'relu')
-        self.gaussian = GaussianLayer(256, dim_latent)
-        self.decoder = MLP(dim_latent, 256, dim_in, 'sigmoid')
+        # self.encoder = MLP(self.input_size(), 256, 256, 'relu')
+        self.encoder = MultiLayerPerceptron(self.input_size(), 512, 2, 'elu', 'highway')
+        self.gaussian = GaussianLayer(512, dim_latent)
+        self.decoder = MultiLayerPerceptron(dim_latent, 512, 2, 'elu', 'sequential')
+        self.bernoulli = Dense(512, dim_in, non_linearity='sigmoid')
         self.bce = nn.BCELoss(reduction='none')
         
     def init(self, x):
@@ -34,6 +43,7 @@ class IterNet(nn.Module):
         x = self.gaussian.sample(n_samples=1)
         # (B, N, D)
         x = self.decoder(x)
+        x = self.bernoulli(x)
         # broadcast input
         x, org = torch.broadcast_tensors(x, org[:, None, :])
         # (B, N, D)
@@ -57,14 +67,20 @@ class IterNet(nn.Module):
         """
         # initialize lambda and its gradient from prior
         self.init(x)
+        elbos = []
         for i in range(self.n_iters):
             # compute elbo for this iteration
             elbo = self.elbo(x, n_samples=n_samples)
+            elbos.append(elbo)
             # compute new gradient
             # note retain graph has to be true for backpropagation to all iterations
             (-elbo.mean()).backward(retain_graph=True)
-        
+
         if reduce:
+            # elbo = 0
+            # for (i, e) in enumerate(elbos):
+            #     i = i + 1
+            #     elbo = elbo + i / self.n_iters * e
             elbo = elbo.mean()
         return -elbo
     
@@ -85,6 +101,7 @@ class IterNet(nn.Module):
         x = self.gaussian(x, n_samples)
         # (B, N, D)
         x = self.decoder(x)
+        x = self.bernoulli(x)
         # broadcast input
         x, org = torch.broadcast_tensors(x, org[:, None, :])
         # (B, N, D)
@@ -100,13 +117,13 @@ class IterNet(nn.Module):
         logger.update(kl=kl.mean())
         # generate from unit gaussian
         z = torch.randn(1, self.dim_latent).to(x.device)
-        gen = self.decoder(z)
+        gen = self.bernoulli(self.decoder(z))
         logger.update(gen=gen.view(1, 28, 28)[0])
         
         return -bce - kl[:, None]
     
     def input_size(self):
-        return self.dim_in + 6 * self.dim_latent
+        return  4 * self.dim_latent
     
     def get_input_encoding(self, x):
         """
@@ -122,24 +139,33 @@ class IterNet(nn.Module):
         eps = 1e-5
         mean = self.gaussian.mean
         log_var = self.gaussian.log_var
+        mean_grad = self.gaussian.mean.grad
+        log_var_grad = self.gaussian.log_var.grad
+        
+        # layer normalization
+        layer_mean = log_var_grad.mean(dim=0, keepdim=True)
+        layer_std = log_var_grad.std(dim=0, keepdim=True)
+        log_var_grad = (log_var_grad - layer_mean) / (layer_std + 1e-5)
+        
+        layer_mean = mean_grad.mean(dim=0, keepdim=True)
+        layer_std = mean_grad.std(dim=0, keepdim=True)
+        mean_grad = (mean_grad - layer_mean) / (layer_std + 1e-5)
         
         # initial: first iteration, initialize all to zero
         # log gradients
-        mean_log_gradient = torch.log(mean.grad.abs().detach() + eps)
-        log_var_log_gradient = torch.log(log_var.grad.abs().detach() + eps)
+        # mean_log_gradient = torch.log(mean.grad.abs().detach() + eps)
+        # log_var_log_gradient = torch.log(log_var.grad.abs().detach() + eps)
         # gradient sign
-        mean_sign_gradient = torch.sign(mean.grad.abs().detach())
-        log_var_sign_gradient = torch.sign(log_var.grad.abs().detach())
+        # mean_sign_gradient = torch.sign(mean.grad.abs().detach())
+        # log_var_sign_gradient = torch.sign(log_var.grad.abs().detach())
 
-        logger.update(mean_log_grad_mag=mean_log_gradient.mean())
-        logger.update(log_var_log_grad_mag=mean_log_gradient.mean())
+        logger.update(mean_grad=mean_grad.abs().mean().item())
+        logger.update(log_var_grad=log_var_grad.abs().mean().item())
         
         # concatenate all inputs
         x = (
-            x,
             mean, log_var,
-            mean_log_gradient, log_var_log_gradient,
-            mean_sign_gradient, log_var_sign_gradient
+            mean_grad, log_var_grad
         )
         x = torch.cat(x, dim=1)
         return x
@@ -179,7 +205,9 @@ class GaussianLayer(nn.Module):
     def __init__(self, dim_in, dim_latent):
         nn.Module.__init__(self)
         self.mean_layer = nn.Linear(dim_in, dim_latent)
+        self.mean_gate = Dense(dim_in, dim_latent, non_linearity='sigmoid')
         # log variance here
+        self.log_var_gate = Dense(dim_in, dim_latent, non_linearity='sigmoid')
         self.log_var_layer = nn.Linear(dim_in, dim_latent)
         
         # self.normal = Normal(0, 1)
@@ -190,9 +218,11 @@ class GaussianLayer(nn.Module):
         :return: (B, N, D), where N is the number of samples
         """
         # (B, L)
-        self.mean = self.mean_layer(x)
+        mean_gate = self.mean_gate(x)
+        self.mean = mean_gate * self.mean + (1 - mean_gate) * self.mean_layer(x)
         # log standard deviation here
-        self.log_var = self.log_var_layer(x)
+        log_var_gate = self.log_var_gate(x)
+        self.log_var = log_var_gate * self.log_var + (1 - log_var_gate) * self.log_var_layer(x)
         # required for next iteration
         self.mean.retain_grad()
         self.log_var.retain_grad()
