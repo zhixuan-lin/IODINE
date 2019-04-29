@@ -10,9 +10,6 @@ class IterNetV12(nn.Module):
     def __init__(self, dim_in, dim_latent, n_iters=12):
         """
         Gate, no input, highway, 12 iters
-        :param dim_in:
-        :param dim_latent:
-        :param n_iters:
         """
         nn.Module.__init__(self)
         self.dim_in = dim_in
