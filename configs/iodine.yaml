@@ -1,12 +1,12 @@
 EXP:
-  NAME: 'iodine'
+  NAME: 'iodine_new'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
-  PARALLEL: False
+  PARALLEL: True
   DEVICE_IDS: []
 DATASET:
-  TRAIN: "MNIST"
+  TRAIN: "IODINE"
   VAL: "MNIST"
   TEST: "MNIST"
 TRAIN:

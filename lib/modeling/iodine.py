@@ -59,6 +59,7 @@ class IODINE(nn.Module):
             # get refinement
             mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, self.lstm_hidden)
             self.posterior.update(mean_delta, logvar_delta)
+            # elbo = self.elbo(x)
             
         return -elbo
         
@@ -96,14 +97,19 @@ class IODINE(nn.Module):
         # compute pixelwise log likelihood (mixture of Gaussian)
         # refer to the formula to see why this is the case
         # (B, 3, H, W)
-        self.log_likelihood = torch.logsumexp(
-            torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
-            dim=1
-        )
         # self.log_likelihood = torch.logsumexp(
         #     torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
         #     dim=1
         # )
+        # print(gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)).max())
+        self.log_likelihood = (
+            torch.log(
+                torch.sum(
+                    self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
+                    dim=1
+                )
+            )
+        )
         
         
         # sum over (3, H, W), mean over B
@@ -140,8 +146,8 @@ class IODINE(nn.Module):
         lambda_grad = self.broadcast(lambda_grad, W, H)
         
         # encoding gradient
-        # x = torch.cat((x, lambda_grad), dim=2)
-        x = lambda_grad
+        x = torch.cat((x, lambda_grad), dim=2)
+        # x = lambda_grad
         
         return x
     
@@ -153,7 +159,8 @@ class IODINE(nn.Module):
         
     
     def get_input_size(self):
-        return 2 * self.dim_latent + 2
+        return 3 + 2 * self.dim_latent + 2
+        # return 3
     
     @staticmethod
     def layernorm(x):
@@ -215,6 +222,7 @@ class RefinementNetwork(nn.Module):
         self.conv4 = nn.Conv2d(dim_conv, dim_conv, kernel_size=3, stride=2, padding=1)
         # (D, 128, 128) goes to (64, 8, 8)
         self.mlp = MLP(256, dim_hidden, n_layers=2)
+        # self.mlp = MLP(4096, dim_hidden, n_layers=2)
         self.lstm = nn.LSTMCell(dim_hidden, dim_hidden)
         self.mean_update = nn.Linear(dim_hidden, dim_out)
         self.logvar_update = nn.Linear(dim_hidden, dim_out)
@@ -316,8 +324,9 @@ class MLP(nn.Module):
             
         return x
     
-class Gaussian:
+class Gaussian(nn.Module):
     def __init__(self):
+        nn.Module.__init__(self)
         self.mean = None
         self.logvar = None
         
@@ -380,7 +389,7 @@ if __name__ == '__main__':
     net = IODINE(3, 3, 128)
     H, W = 32, 32
     B = 4
-    x = torch.randn(B, 1, H, W)
+    x = torch.randn(B, 3, H, W)
     for i in range(5):
         loss = net(x)
         loss.backward()

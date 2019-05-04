@@ -53,6 +53,7 @@ def train(
             start_time = time.perf_counter()
             data = data.to(device)
             loss = model(data)
+            loss = loss.mean()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

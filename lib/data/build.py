@@ -1,5 +1,6 @@
 from .mnist import MNIST
 from torch.utils.data import DataLoader
+from .clevr import CLEVR
 def make_dataloader(cfg, mode):
     if mode == 'train':
         batch_size = cfg.TRAIN.BATCH_SIZE
@@ -20,4 +21,7 @@ def make_dataloader(cfg, mode):
     
 
 def make_dataset(cfg, mode):
-    return MNIST('data/MNIST', mode)
+    if cfg.DATASET.TRAIN == 'MNIST':
+        return MNIST('data/MNIST', mode)
+    elif cfg.DATASET.TRAIN == 'CLEVR':
+        return CLEVR('data/CLEVR/images', mode)
