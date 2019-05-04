@@ -1,6 +1,7 @@
 import torch
 from .vae import VAE
 from lib.modeling.iter_net import IterNet
+from lib.modeling.iodine import IODINE
 
 def make_model(cfg):
     device = torch.device(cfg.MODEL.DEVICE)
@@ -17,4 +18,6 @@ def _make_model(cfg):
         return VAE(28 * 28, 128)
     elif cfg.MODEL.NAME == 'Iter':
         return IterNet(28 * 28, 64)
+    elif cfg.MODEL.NAME == 'IODINE':
+        return IODINE(5, 5, 128)
 

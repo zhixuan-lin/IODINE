@@ -2,12 +2,13 @@ import torch
 import torchvision
 from torch.utils.data import Dataset
 from torchvision import transforms
-
+from PIL import Image
 
 class MNIST(Dataset):
     def __init__(self, root, mode):
         train = (mode == 'train')
         transform = transforms.Compose([
+            transforms.Resize(32, interpolation=Image.NEAREST),
             transforms.ToTensor()
         ])
         self.mnist = torchvision.datasets.MNIST(root, train=train, transform=transform, download=False)

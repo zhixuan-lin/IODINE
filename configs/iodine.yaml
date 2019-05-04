@@ -1,0 +1,30 @@
+EXP:
+  NAME: 'iodine'
+MODEL:
+  NAME: "IODINE"
+  DEVICE: "cuda"
+  PARALLEL: False
+  DEVICE_IDS: []
+DATASET:
+  TRAIN: "MNIST"
+  VAL: "MNIST"
+  TEST: "MNIST"
+TRAIN:
+  RESUME: True
+  # per epoch
+  CHECKPOINT_PERIOD: 10
+  BATCH_SIZE: 32
+  MAX_EPOCHS: 1000
+  BASE_LR: 1e-4
+  WEIGHT_DECAY: 0.0005
+  PRINT_EVERY: 20
+  VAL_EVERY: 1000
+VAL:
+  IS_ON: False
+  BATCH_SIZE: 128
+
+TENSORBOARD:
+  IS_ON: True
+  TARGETS:
+    SCALAR: ["loss", "kl", "likelihood"]
+    IMAGE: ['image', 'pred', 'gen']
