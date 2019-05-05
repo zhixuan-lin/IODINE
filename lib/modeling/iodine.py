@@ -17,7 +17,7 @@ class IODINE(nn.Module):
         self.posterior = Gaussian()
         
         # global variance, trainable
-        self.logvar = nn.Parameter(torch.zeros(1))
+        self.logvar = nn.Parameter(-3 * torch.ones(1))
         
         # lstm hidden states
         self.lstm_hidden = None
@@ -43,6 +43,7 @@ class IODINE(nn.Module):
         :param x: (B, 3, H, W)
         :return: loss
         """
+        logger.update(var=self.logvar.item())
         B, _, H, W = x.size()
         # initialization
         self.posterior.init_unit((B, self.K, self.dim_latent), device=x.device)
@@ -53,6 +54,7 @@ class IODINE(nn.Module):
             elbo = self.elbo(x)
             elbo.backward(retain_graph=True)
             elbos.append(elbo)
+            
             # get inputs to the refinement network
             # (B, K, D, H, W), D depends on encoding
             input = self.get_input_encoding(x)
@@ -60,6 +62,10 @@ class IODINE(nn.Module):
             mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, self.lstm_hidden)
             self.posterior.update(mean_delta, logvar_delta)
             # elbo = self.elbo(x)
+            
+        elbo = 0
+        for i, e in enumerate(elbos):
+            elbo = elbo + (i + 1) / self.n_iters * e
             
         return -elbo
         
@@ -97,19 +103,20 @@ class IODINE(nn.Module):
         # compute pixelwise log likelihood (mixture of Gaussian)
         # refer to the formula to see why this is the case
         # (B, 3, H, W)
-        # self.log_likelihood = torch.logsumexp(
-        #     torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
-        #     dim=1
-        # )
-        # print(gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)).max())
-        self.log_likelihood = (
-            torch.log(
-                torch.sum(
-                    self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
-                    dim=1
-                )
-            )
+        self.log_likelihood = torch.logsumexp(
+            torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, 0.2),
+            dim=1
         )
+        # print(gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)).max())
+        # self.log_likelihood = (
+        #     torch.log(
+        #         torch.sum(
+        #             # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
+        #             self.mask * gaussian_likelihood(x[:, None], self.mean, 0.5),
+        #             dim=1
+        #         )
+        #     )
+        # )
         
         
         # sum over (3, H, W), mean over B
@@ -117,11 +124,22 @@ class IODINE(nn.Module):
         
         # ELBO
         elbo = log_likelihood - kl
-        
+        # elbo = log_likelihood
+        pred = torch.sum(self.mask * self.mean, dim=1)
         logger.update(image=x[0])
-        logger.update(pred=self.mean[0, 0])
+        logger.update(pred=pred[0])
         logger.update(kl=kl)
         logger.update(likelihood=log_likelihood)
+        
+        masks = {}
+        for i in range(self.K):
+            masks['mask_{}'.format(i)] = self.mask[0, i, 0]
+        preds = {}
+        for i in range(self.K):
+            preds['pred_{}'.format(i)] = self.mean[0, i]
+            
+        logger.update(**masks)
+        logger.update(**preds)
         
         return elbo
         
@@ -159,13 +177,17 @@ class IODINE(nn.Module):
         
     
     def get_input_size(self):
-        return 3 + 2 * self.dim_latent + 2
+        return   3 + 2 * self.dim_latent + 2
         # return 3
     
     @staticmethod
     def layernorm(x):
-        layer_mean = x.mean(dim=0, keepdim=True)
-        layer_std = x.std(dim=0, keepdim=True)
+        """
+        :param x: (B, K, L)
+        :return:
+        """
+        layer_mean = x.mean(dim=2, keepdim=True)
+        layer_std = x.std(dim=2, keepdim=True)
         x = (x - layer_mean) / (layer_std + 1e-5)
         return x
 
@@ -379,7 +401,8 @@ def gaussian_log_likelihood(x, loc, scale):
     Dimension-wise log likelihood
     """
     from math import pi, sqrt, log
-    return -(x - loc) ** 2 / (2 * scale ** 2) - torch.log(scale) - 0.5 * log(2 * pi)
+    return -(x - loc) ** 2 / (2 * scale ** 2) - log(scale) - 0.5 * log(2 * pi)
+    # return -(x - loc) ** 2
 
 def gaussian_likelihood(x, loc, scale):
     from math import pi, sqrt, log

@@ -1,12 +1,12 @@
 EXP:
-  NAME: 'iodine_layernorm'
+  NAME: 'iodine_mnist_K'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
-  PARALLEL: True
+  PARALLEL: False
   DEVICE_IDS: []
 DATASET:
-  TRAIN: "CLEVR"
+  TRAIN: "MNIST"
   VAL: "MNIST"
   TEST: "MNIST"
 TRAIN:

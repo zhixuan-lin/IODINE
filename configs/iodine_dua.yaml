@@ -1,5 +1,5 @@
 EXP:
-  NAME: 'iodine_layernorm'
+  NAME: 'iodine_dua'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
@@ -15,7 +15,7 @@ TRAIN:
   CHECKPOINT_PERIOD: 10
   BATCH_SIZE: 32
   MAX_EPOCHS: 1000
-  BASE_LR: 1e-4
+  BASE_LR: 3e-4
   WEIGHT_DECAY: 0.0005
   PRINT_EVERY: 20
   VAL_EVERY: 1000

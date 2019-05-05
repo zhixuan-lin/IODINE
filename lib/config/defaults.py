@@ -29,6 +29,70 @@ _C.MODEL.DEVICE = "cpu"
 _C.MODEL.PARALLEL = False
 _C.MODEL.DEVICE_IDS = []
 
+# -----------------------------------------------------------------------------
+# ARCHITECTURE
+# -----------------------------------------------------------------------------
+_C.ARCH = CN()
+
+# Number of iteration
+_C.ARCH.ITERS = 5
+# Number of slots
+_C.ARCH.SLOTS = 7
+# Global, fixed sigma for evaluating data likelihood
+_C.ARCH.SIGMA = 0.2
+# Latent variable dimension
+_C.ARCH.DIM_LATENT = 128
+# Input image size (must be a multiple of 8)
+_C.ARCH.IMG_SIZE = 32
+# Input channels (gray or color)
+_C.ARCH.IMG_CHANNELS = 3
+
+# Input encodings
+_C.ARCH.ENCODING = [
+    # input
+    'image',
+    # predicted means
+    'means',
+    # mask
+    'mask',
+    # mask logits
+    'mask_logits',
+    # gradient of means
+    'grad_means',
+    # gradient of mask
+    'grad_mask',
+    # posterior
+    'posterior'
+    # mask posterior
+    'mask_posterior',
+    # likelihood
+    'likelihood',
+    # leave-one-out likelihood
+    'leave_one_out_likelihood',
+    # layer normalized graident of posterior
+    'layer_norm_grad_post',
+    # layer normalized graident of posterior with stop gradient
+    'layer_norm_stop_grad_post',
+    # graident of posterior (not layer normed)
+    'grad_post',
+]
+
+# Refinement network
+_C.ARCH.REF = CN()
+
+# Refinement network Conv channels
+_C.ARCH.REF.CONV_CHAN = 64
+# Refinement network MLP units
+_C.ARCH.REF.MLP_UNITS = 256
+
+# Decoder
+_C.ARCH.DEC = CN()
+
+# Decoder network Conv channels
+_C.ARCH.DEC.CONV_CHAN = 64
+
+
+
 
 # -----------------------------------------------------------------------------
 # DATASET

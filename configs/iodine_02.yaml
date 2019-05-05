@@ -1,5 +1,5 @@
 EXP:
-  NAME: 'iodine_layernorm'
+  NAME: 'iodine_02'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
