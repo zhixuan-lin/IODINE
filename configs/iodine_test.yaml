@@ -1,5 +1,5 @@
 EXP:
-  NAME: 'iodine_02'
+  NAME: 'iodine_test'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
@@ -50,7 +50,7 @@ ARCH:
     # gradient of mask
     'grad_mask',
     # posterior
-    'posterior'
+    'posterior',
     # mask posterior
     'mask_posterior',
     # likelihood
@@ -69,7 +69,11 @@ ARCH:
 TENSORBOARD:
   IS_ON: True
   TARGETS:
-    SCALAR: ["loss", "kl", "likelihood", "var"]
-    IMAGE: ['image', 'pred', 'gen',
-            'mask_0', 'mask_1', 'mask_2','mask_3', 'mask_4','mask_5','mask_6',
-    'pred_0', 'pred_1', 'pred_2','pred_3', 'pred_4','pred_5','pred_6']
+    SCALAR: [
+      "loss", "kl", "likelihood", "var",
+      'mean_grad_norm1', 'mean_grad_norm2']
+    IMAGE: [
+      'image', 'pred', 'gen',
+      'mask_0', 'mask_1', 'mask_2','mask_3', 'mask_4','mask_5','mask_6',
+      'pred_0', 'pred_1', 'pred_2','pred_3', 'pred_4','pred_5','pred_6',
+      ]

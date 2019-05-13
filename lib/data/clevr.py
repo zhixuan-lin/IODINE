@@ -21,7 +21,7 @@ class CLEVR(Dataset):
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.CenterCrop(192),
-            transforms.Resize(32),
+            transforms.Resize(64),
             transforms.ToTensor()
         ])
         

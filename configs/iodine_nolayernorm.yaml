@@ -1,5 +1,5 @@
 EXP:
-  NAME: 'iodine_02'
+  NAME: 'iodine_nolayernorm'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
@@ -29,7 +29,7 @@ ARCH:
   DIM_LATENT: 128
   IMG_SIZE: 32
   IMG_CHANNELS: 3
-  LAYERNORM: True
+  LAYERNORM: False
   STOP_GRADIENT: False
   REF:
     CONV_CHAN: 64
@@ -50,7 +50,7 @@ ARCH:
     # gradient of mask
     'grad_mask',
     # posterior
-    'posterior'
+    'posterior',
     # mask posterior
     'mask_posterior',
     # likelihood

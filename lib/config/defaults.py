@@ -39,13 +39,19 @@ _C.ARCH.ITERS = 5
 # Number of slots
 _C.ARCH.SLOTS = 7
 # Global, fixed sigma for evaluating data likelihood
-_C.ARCH.SIGMA = 0.2
+_C.ARCH.SIGMA = 0.13
 # Latent variable dimension
 _C.ARCH.DIM_LATENT = 128
 # Input image size (must be a multiple of 8)
 _C.ARCH.IMG_SIZE = 32
 # Input channels (gray or color)
 _C.ARCH.IMG_CHANNELS = 3
+
+# Layer normalization
+_C.ARCH.LAYERNORM = True
+
+# Stop gradient?
+_C.ARCH.STOP_GRADIENT = False
 
 # Input encodings
 _C.ARCH.ENCODING = [
@@ -61,20 +67,16 @@ _C.ARCH.ENCODING = [
     'grad_means',
     # gradient of mask
     'grad_mask',
+    # gradients of posterior parameters
+    'grad_post',
     # posterior
-    'posterior'
-    # mask posterior
+    'posterior',
+    # mask posterior (not implemented)
     'mask_posterior',
     # likelihood
     'likelihood',
     # leave-one-out likelihood
     'leave_one_out_likelihood',
-    # layer normalized graident of posterior
-    'layer_norm_grad_post',
-    # layer normalized graident of posterior with stop gradient
-    'layer_norm_stop_grad_post',
-    # graident of posterior (not layer normed)
-    'grad_post',
 ]
 
 # Refinement network

@@ -5,47 +5,58 @@ import numpy as np
 from lib.utils.vis_logger import logger
 
 class IODINE(nn.Module):
-    def __init__(self, K, n_iters, dim_latent):
+    def __init__(self, ARCH):
         nn.Module.__init__(self)
-        self.dim_latent = dim_latent
-        self.n_iters = n_iters
-        self.K = K
-        self.refine = RefinementNetwork(self.get_input_size(), 64, 256, dim_latent)
-        self.broadcast = SpatialBroadcast()
-        self.decoder = Decoder(dim_in=dim_latent + 2, dim_hidden=64)
+        self.dim_latent = ARCH.DIM_LATENT
+        self.n_iters = ARCH.ITERS
+        self.K = ARCH.SLOTS
+        self.encodings = ARCH.ENCODING
+        self.img_channels = ARCH.IMG_CHANNELS
+        # standard derivation for computing likelihood
+        self.sigma = ARCH.SIGMA
+        # use layernormalizatoin?
+        self.use_layernorm = ARCH.LAYERNORM
+        # use stop gradient? (not availabe now)
+        self.use_stop_gradient = ARCH.STOP_GRADIENT
         
+        
+        # architecture
+        self.refine = RefinementNetwork(
+            self.get_input_size(), ARCH.REF.CONV_CHAN, ARCH.REF.MLP_UNITS,
+            ARCH.DIM_LATENT, img_size=ARCH.IMG_SIZE)
+        self.broadcast = SpatialBroadcast()
+        # 2 for 2 coordinate channels
+        self.decoder = Decoder(dim_in=ARCH.DIM_LATENT + 2, dim_hidden=ARCH.DEC.CONV_CHAN)
         self.posterior = Gaussian()
         
-        # global variance, trainable
-        self.logvar = nn.Parameter(-3 * torch.ones(1))
+        
         
         # lstm hidden states
         self.lstm_hidden = None
         
-        
         # these states are necessary for input encoding
-        self.z = [None] * K
+        self.z = None
         # output mean
-        self.mean = [None] * K
+        self.mean = None
         # mask logits
-        self.mask_logits = [None] * K
+        self.mask_logits = None
         # mask
-        self.mask = [None] * K
+        self.mask = None
         # output mean
-        self.mean = [None] * K
+        self.mean = None
         # p(x|z_k), dimension-wise
-        self.log_likelihood = [None] * K
-        # kl divergence KL(p(zk|x)||p(z_k))
-        self.kl = [None] * K
+        self.log_likelihood = None
+        # kl divergence KL(p(z_k|x)||p(z_k))
+        self.kl = None
         
     def forward(self, x):
         """
         :param x: (B, 3, H, W)
         :return: loss
         """
-        logger.update(var=self.logvar.item())
+        # logger.update(var=self.logvar.item())
         B, _, H, W = x.size()
-        # initialization
+        # initialization, set posterior to prior
         self.posterior.init_unit((B, self.K, self.dim_latent), device=x.device)
         self.lstm_hidden = None
         elbos = []
@@ -90,9 +101,13 @@ class IODINE(nn.Module):
         # (B, K, 3, H, W), (B, K, 1, H, W)
         self.mean, self.mask_logits = self.decoder(z_broadcast)
         
+        self.mean.retain_grad()
+        
         # softmax mask
         # (B, K, 1, H, W)
         self.mask = F.softmax(self.mask_logits, dim=1)
+        
+        self.mask.retain_grad()
         
         # compute kl divergence
         # (B, K, L)
@@ -103,20 +118,24 @@ class IODINE(nn.Module):
         # compute pixelwise log likelihood (mixture of Gaussian)
         # refer to the formula to see why this is the case
         # (B, 3, H, W)
-        self.log_likelihood = torch.logsumexp(
-            torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, 0.2),
-            dim=1
-        )
-        # print(gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)).max())
-        # self.log_likelihood = (
-        #     torch.log(
-        #         torch.sum(
-        #             # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
-        #             self.mask * gaussian_likelihood(x[:, None], self.mean, 0.5),
-        #             dim=1
-        #         )
-        #     )
+        # self.log_likelihood = torch.logsumexp(
+        #     torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, 0.2),
+        #     dim=1
         # )
+        # print(gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)).max())
+        # self.likelihood (B, K, 3, H, W)
+        # self.mask (B, K, 1, H, W) self.mean (B, K, 3, H, W) x (B, 3, H, W)
+        # self.log_likelihood (B, 3, H, W)
+        self.likelihood =  gaussian_likelihood(x[:, None], self.mean, self.sigma)
+        self.log_likelihood = (
+            torch.log(
+                torch.sum(
+                    # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
+                    self.mask * self.likelihood,
+                    dim=1
+                )
+            )
+        )
         
         
         # sum over (3, H, W), mean over B
@@ -148,37 +167,100 @@ class IODINE(nn.Module):
         :param x: (B, 3, H, W)
         :return: (B, K, D, H, W), D depends on encoding scheme
         """
+        
+        encoding = None
         B, C, H, W = x.size()
-        # (B, K, 3, H, W)
-        x =  x[:, None].repeat(1, self.K, 1, 1, 1)
-        # (B, K, L)
-        mean_grad = self.posterior.mean.grad.detach()
-        # (B, K, L)
-        logvar_grad = self.posterior.logvar.grad.detach()
         
-        mean_grad = self.layernorm(mean_grad)
-        logvar_grad = self.layernorm(logvar_grad)
-        # concat to (B, K, L * 2)
-        lambda_grad = torch.cat((mean_grad, logvar_grad), dim=-1)
-        # (B, K, L*2+2, H, W)
-        lambda_grad = self.broadcast(lambda_grad, W, H)
+        if 'image' in self.encodings:
+            # (B, K, 3, H, W)
+            encoding = x[:, None].repeat(1, self.K, 1, 1, 1)
+            
+        if 'grad_post' in self.encodings:
+            # (B, K, L)
+            mean_grad = self.posterior.mean.grad.detach()
+            # (B, K, L)
+            logvar_grad = self.posterior.logvar.grad.detach()
         
-        # encoding gradient
-        x = torch.cat((x, lambda_grad), dim=2)
-        # x = lambda_grad
-        
-        return x
+            if self.use_layernorm:
+                mean_grad = self.layernorm(mean_grad)
+                logvar_grad = self.layernorm(logvar_grad)
+            # concat to (B, K, L * 2)
+            lambda_grad = torch.cat((mean_grad, logvar_grad), dim=-1)
+            # (B, K, L*2+2, H, W)
+            lambda_grad = self.broadcast(lambda_grad, W, H)
     
-    # def get_input_encoding(self, x):
-    #     B, C, H, W = x.size()
-    #     # (B, K, 3, H, W)
-    #     x =  x[:, None].repeat(1, self.K, 1, 1, 1)
-    #     return x
+            encoding = torch.cat([encoding, lambda_grad], dim=2) if encoding is not None else lambda_grad
         
+        if 'means' in self.encodings:
+            encoding = torch.cat([encoding, self.mean], dim=2) if encoding is not None else self.mean
+        if 'mask' in self.encodings:
+            encoding = torch.cat([encoding, self.mask], dim=2) if encoding is not None else self.mask
+        if 'mask_logits' in self.encodings:
+            encoding = torch.cat([encoding, self.mask_logits], dim=2) if encoding is not None else self.mask_l
+        if 'grad_means' in self.encodings:
+            mean_grad = self.mean.grad.detach()
+            encoding = torch.cat([encoding, mean_grad], dim=2) if encoding is not None else mean_grad
+        if 'grad_mask' in self.encodings:
+            mask_grad = self.mask.grad.detach()
+            encoding = torch.cat([encoding, mask_grad], dim=2) if encoding is not None else mask_grad
+        if 'posterior' in self.encodings:
+            # current posterior
+            # (B, K, L)
+            mean = self.posterior.mean
+            logvar = self.posterior.logvar
+            # concat to (B, K, L * 2)
+            lambda_post = torch.cat((mean, logvar), dim=-1)
+            # (B, K, L*2+2, H, W)
+            lambda_post = self.broadcast(lambda_post, W, H)
+
+            encoding = torch.cat([encoding, lambda_post], dim=2) if encoding is not None else lambda_post
+            
+        if 'mask_posterior' in self.encodings:
+            # not implemented
+            pass
+        
+        if 'likelihood' in self.encodings:
+            # (B, 3, H, W)
+            log_likelihood = self.log_likelihood
+            log_likelihood = log_likelihood[:, None].repeat(1, self.K, 1, 1, 1)
+            encoding = torch.cat([encoding, log_likelihood], dim=2) if encoding is not None else log_likelihood
+            
+        if 'leave_one_out_likelihood' in self.encodings:
+            # not implemented
+            pass
+
+        return encoding.detach()
     
     def get_input_size(self):
-        return   3 + 2 * self.dim_latent + 2
-        # return 3
+        size = 0
+        if 'image' in self.encodings:
+            size += self.img_channels
+        if 'grad_post' in self.encodings:
+            size += 2 * self.dim_latent + 2
+        if 'means' in self.encodings:
+            size += self.img_channels
+        if 'mask' in self.encodings:
+            size += 1
+        if 'mask_logits' in self.encodings:
+            size += 1
+        if 'grad_means' in self.encodings:
+            size += self.img_channels
+        if 'grad_mask' in self.encodings:
+            size += 1
+        if 'posterior' in self.encodings:
+            size += 2 * self.dim_latent + 2
+        if 'mask_posterior' in self.encodings:
+            # not implemented
+            pass
+
+        if 'likelihood' in self.encodings:
+            size += self.img_channels
+
+        if 'leave_one_out_likelihood' in self.encodings:
+            # not implemented
+            pass
+            
+        return size
     
     @staticmethod
     def layernorm(x):
@@ -190,6 +272,20 @@ class IODINE(nn.Module):
         layer_std = x.std(dim=2, keepdim=True)
         x = (x - layer_mean) / (layer_std + 1e-5)
         return x
+    
+    @staticmethod
+    def stop_gradient(x, threshold=5.0):
+        """
+        :param x: (B, K, L)
+        :return: (B, K, L)
+        """
+        
+        norm = torch.norm(x, dim=2)
+        indices = norm > threshold
+        x[indices, :] = x[indices, :] / norm[indices][:,None] * threshold
+        
+        return x
+        
 
 
 class Decoder(nn.Module):
@@ -230,7 +326,7 @@ class RefinementNetwork(nn.Module):
     """
     Given input encoding, output updates to lambda.
     """
-    def __init__(self, dim_in, dim_conv, dim_hidden, dim_out):
+    def __init__(self, dim_in, dim_conv, dim_hidden, dim_out, img_size):
         """
         :param dim_in: input channels
         :param dim_conv: conv output channels
@@ -243,7 +339,7 @@ class RefinementNetwork(nn.Module):
         self.conv3 = nn.Conv2d(dim_conv, dim_conv, kernel_size=3, stride=2, padding=1)
         self.conv4 = nn.Conv2d(dim_conv, dim_conv, kernel_size=3, stride=2, padding=1)
         # (D, 128, 128) goes to (64, 8, 8)
-        self.mlp = MLP(256, dim_hidden, n_layers=2)
+        self.mlp = MLP(dim_conv * (img_size // 16) ** 2, dim_hidden, n_layers=2)
         # self.mlp = MLP(4096, dim_hidden, n_layers=2)
         self.lstm = nn.LSTMCell(dim_hidden, dim_hidden)
         self.mean_update = nn.Linear(dim_hidden, dim_out)
@@ -291,6 +387,7 @@ class SpatialBroadcast(nn.Module):
     def forward(self, x, width, height):
         """
         :param x: (B, K, L)
+        :param coordinate: whether to a the coordinate dimension
         :return: (B, K, L + 2, W, H)
         """
         B, K, *ORI = x.size()
@@ -312,8 +409,7 @@ class SpatialBroadcast(nn.Module):
 
         # (B, L + 2, W, H)
         x = torch.cat((x, xx, yy), dim=1)
-        
-        
+            
         BK, *ORI = x.size()
         x = x.view(B, K, *ORI)
         

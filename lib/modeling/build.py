@@ -19,5 +19,5 @@ def _make_model(cfg):
     elif cfg.MODEL.NAME == 'Iter':
         return IterNet(28 * 28, 64)
     elif cfg.MODEL.NAME == 'IODINE':
-        return IODINE(7, 5, 128)
+        return IODINE(cfg.ARCH)
 
