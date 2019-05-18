@@ -1,6 +1,7 @@
 from .mnist import MNIST
 from torch.utils.data import DataLoader
 from .clevr import CLEVR
+from .dsprite import MultiDSprites
 def make_dataloader(cfg, mode):
     if mode == 'train':
         batch_size = cfg.TRAIN.BATCH_SIZE
@@ -25,3 +26,5 @@ def make_dataset(cfg, mode):
         return MNIST('data/MNIST', mode)
     elif cfg.DATASET.TRAIN == 'CLEVR':
         return CLEVR('data/CLEVR/images', mode)
+    elif cfg.DATASET.TRAIN == 'DSPRITES':
+        return MultiDSprites('data/DSPRITES', mode)
