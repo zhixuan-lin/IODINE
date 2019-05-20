@@ -1,18 +1,18 @@
 # 5-21
 
-One major thing is that they submitted a revised version on Arxiv last week, in which they clarified many details that have confused me. There are many differences between their and my implementations, so I will try to modify my implementation to match their description. The current results from my implementation below do not seem satisfying, and I think this is due to these implementation details.
+The author of Multi-Object Representaiont Learning have submitted a revised version on Arxiv last week, in which they clarified many details. There are many differences between their and my implementations, so I will modify mine to match their description. The current results from my implementation below do not seem satisfying, and I think this is due to these implementation details. The following results are from my current implementation.
 
-I trained the network on Multi-dSprites. It captures position, size and color, but it struggles to capture sharp shapes. This is also mentioned in the paper and they also don't know why:
+I trained the network on Multi-dSprites. It captures position, size and color, but it struggles to capture sharp shapes. This is also mentioned in the paper and they also don't know why. The following are two reconstruction examples:
 
 ![F7](pics/F7.png)
 
-Also measure the ARI on Multi-dSprites:
+I also measured ARI on Multi-dSprites. There is a obvious gap. This might be due to variation in our implementation.
 
 | Mine  | Reported |
 | ----- | -------- |
 | 0.680 | 0.767    |
 
-I also try to reproduced the figure demonstrating disentanglement on CLEVR. In this figure, each column corresponds to variation in one latent unit. Latent units are ranked according to variance. It can be seen that some disentanglement is achieved, but not so well.
+I also try to reproduced the figure demonstrating disentanglement on CLEVR. In this figure, each column corresponds to variation in one latent unit. Latent units are ranked according to variance. It can be seen that some disentanglement is achieved, but not so well. Size and position in the first three columns are coupled, for example.
 
 ![F8](pics/F8.png)
 
