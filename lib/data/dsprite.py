@@ -17,6 +17,7 @@ class MultiDSprites(Dataset):
         mask_path = os.path.join(self.root, 'masks/{}.npy'.format(index))
         img = io.imread(img_path)
         mask = np.load(mask_path)
+        mask = torch.from_numpy(mask.astype(np.float))
         transform = transforms.Compose([
             # transforms.ToPILImage(),
             # transforms.CenterCrop(192),
@@ -24,17 +25,12 @@ class MultiDSprites(Dataset):
             transforms.ToTensor()
         ])
         
-        # mask = torch.from_numpy(mask).float()
-        
-        # targets = {
-        #     'mask': mask
-        # }
-        
-        return transform(img).float()
+        return transform(img).float(), mask
         
         
     def __len__(self):
         return 60000
+    
     
     
     

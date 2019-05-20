@@ -10,7 +10,7 @@ def evaluate(model, device, dataloader, evaluator):
     :param dataloader: next(iter(dataloader)) -> data, targets
     """
     
-    cpu = torch.device('cpu')
+    # cpu = torch.device('cpu')
     model = model.to(device)
     if isinstance(model, DataParallel):
         model = model.module
@@ -22,7 +22,9 @@ def evaluate(model, device, dataloader, evaluator):
     model.eval()
     pbar = tqdm(dataloader)
     for data in pbar:
-        data = data.to(device)
+        data = list(data)
+        # image to device
+        data[0] = data[0].to(device)
         evaluator.evaluate(model, data)
         pbar.set_description(evaluator.get_results())
             

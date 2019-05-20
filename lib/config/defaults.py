@@ -86,12 +86,14 @@ _C.ARCH.REF = CN()
 _C.ARCH.REF.CONV_CHAN = 64
 # Refinement network MLP units
 _C.ARCH.REF.MLP_UNITS = 256
+_C.ARCH.REF.KERNEL_SIZE = 3
 
 # Decoder
 _C.ARCH.DEC = CN()
 
 # Decoder network Conv channels
 _C.ARCH.DEC.CONV_CHAN = 64
+_C.ARCH.DEC.KERNEL_SIZE = 3
 
 
 

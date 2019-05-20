@@ -1,5 +1,6 @@
 from .mnist import MNIST
 from torch.utils.data import DataLoader
+import torch
 from .clevr import CLEVR
 from .dsprite import MultiDSprites
 def make_dataloader(cfg, mode):
@@ -16,9 +17,23 @@ def make_dataloader(cfg, mode):
     # build dataset
     dataset = make_dataset(cfg, mode)
     num_workers = cfg.DATALOADER.NUM_WORKERS
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn, shuffle=shuffle, num_workers=num_workers)
     
     return dataloader
+
+def collate_fn(batch):
+    """
+    :param batch: list, each being a tuple (data, mask)
+        data: (*), image
+        mask: (*), mask
+    :return: (data, mask), where mask is a list
+    """
+    
+    data, mask = zip(*batch)
+    data = torch.stack(data, dim=0)
+    
+    return data, mask
+    
     
 
 def make_dataset(cfg, mode):

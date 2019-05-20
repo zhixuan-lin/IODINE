@@ -25,7 +25,9 @@ class CLEVR(Dataset):
             transforms.ToTensor()
         ])
         
-        return transform(img)
+        mask = None
+        
+        return transform(img), mask
         
         
     def __len__(self):

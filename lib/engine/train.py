@@ -45,6 +45,10 @@ def train(
         model.train()
         
         for iter, data in enumerate(dataloader):
+            
+            # Note, first one is image. This is not neat. Just for convenience.
+            data = data[0]
+            
             if iter > len(dataloader):
                 break
             iter = iter + 1

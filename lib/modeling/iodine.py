@@ -23,10 +23,11 @@ class IODINE(nn.Module):
         # architecture
         self.refine = RefinementNetwork(
             self.get_input_size(), ARCH.REF.CONV_CHAN, ARCH.REF.MLP_UNITS,
-            ARCH.DIM_LATENT, img_size=ARCH.IMG_SIZE)
+            ARCH.DIM_LATENT, img_size=ARCH.IMG_SIZE, kernel_size=ARCH.REF.KERNEL_SIZE)
         self.broadcast = SpatialBroadcast()
         # 2 for 2 coordinate channels
-        self.decoder = Decoder(dim_in=ARCH.DIM_LATENT + 2, dim_hidden=ARCH.DEC.CONV_CHAN)
+        self.decoder = Decoder(dim_in=ARCH.DIM_LATENT + 2, dim_hidden=ARCH.DEC.CONV_CHAN,
+                               kernel_size=ARCH.DEC.KERNEL_SIZE)
         self.posterior = Gaussian()
         
         
@@ -292,14 +293,15 @@ class Decoder(nn.Module):
     """
     Given sampled latent variable, output RGB+mask
     """
-    def __init__(self, dim_in, dim_hidden):
+    def __init__(self, dim_in, dim_hidden, kernel_size):
         nn.Module.__init__(self)
         
-        self.conv1 = nn.Conv2d(dim_in, dim_hidden, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=3, stride=1, padding=1)
-        self.conv4 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=3, stride=1, padding=1)
-        self.conv5 = nn.Conv2d(dim_hidden, 4, kernel_size=3, stride=1, padding=1)
+        padding = kernel_size // 2
+        self.conv1 = nn.Conv2d(dim_in, dim_hidden, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv2 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv3 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv4 = nn.Conv2d(dim_hidden, dim_hidden, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv5 = nn.Conv2d(dim_hidden, 4, kernel_size=kernel_size, stride=1, padding=padding)
         
     def forward(self, x):
         """
@@ -326,7 +328,7 @@ class RefinementNetwork(nn.Module):
     """
     Given input encoding, output updates to lambda.
     """
-    def __init__(self, dim_in, dim_conv, dim_hidden, dim_out, img_size):
+    def __init__(self, dim_in, dim_conv, dim_hidden, dim_out, img_size, kernel_size):
         """
         :param dim_in: input channels
         :param dim_conv: conv output channels
@@ -334,10 +336,11 @@ class RefinementNetwork(nn.Module):
         :param dim_out: latent variable dimension
         """
         nn.Module.__init__(self)
-        self.conv1 = nn.Conv2d(dim_in, dim_conv, kernel_size=3, stride=2, padding=1)
-        self.conv2 = nn.Conv2d(dim_conv, dim_conv, kernel_size=3, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(dim_conv, dim_conv, kernel_size=3, stride=2, padding=1)
-        self.conv4 = nn.Conv2d(dim_conv, dim_conv, kernel_size=3, stride=2, padding=1)
+        padding = kernel_size // 2
+        self.conv1 = nn.Conv2d(dim_in, dim_conv, kernel_size=kernel_size, stride=2, padding=padding)
+        self.conv2 = nn.Conv2d(dim_conv, dim_conv, kernel_size=kernel_size, stride=2, padding=padding)
+        self.conv3 = nn.Conv2d(dim_conv, dim_conv, kernel_size=kernel_size, stride=2, padding=padding)
+        self.conv4 = nn.Conv2d(dim_conv, dim_conv, kernel_size=kernel_size, stride=2, padding=padding)
         # (D, 128, 128) goes to (64, 8, 8)
         self.mlp = MLP(dim_conv * (img_size // 16) ** 2, dim_hidden, n_layers=2)
         # self.mlp = MLP(4096, dim_hidden, n_layers=2)
