@@ -1,3 +1,21 @@
+# 5-21
+
+One major thing is that they submitted a revised version on Arxiv last week, in which they clarified many details that have confused me. There are many differences between their and my implementations, so I will try to modify my implementation to match their description. The current results from my implementation below do not seem satisfying, and I think this is due to these implementation details.
+
+I trained the network on Multi-dSprites. It captures position, size and color, but it struggles to capture sharp shapes. This is also mentioned in the paper and they also don't know why:
+
+![F7](pics/F7.png)
+
+Also measure the ARI on Multi-dSprites:
+
+| Mine  | Reported |
+| ----- | -------- |
+| 0.680 | 0.767    |
+
+I also try to reproduced the figure demonstrating disentanglement on CLEVR. In this figure, each column corresponds to variation in one latent unit. Latent units are ranked according to variance. It can be seen that some disentanglement is achieved, but not so well.
+
+![F8](pics/F8.png)
+
 # 5-13
 
 Implemented more input encodings to the refinement network. It seems that layer normalization did help stabalize training, as seen below. The green curve is without layer normalization.
