@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.special import comb
 
+i = 0
+
 def compute_ari(table):
     """
     Compute ari, given the index table
@@ -18,10 +20,15 @@ def compute_ari(table):
     comb_b = comb(b, 2).sum()
     comb_n = comb(n, 2)
     comb_table = comb(table, 2).sum()
-    ari = (
-        (comb_table - comb_a * comb_b / comb_n) /
-        (0.5 * (comb_a + comb_b) - (comb_a * comb_b) / comb_n)
-    )
+    
+    if (comb_b == comb_a == comb_n == comb_table):
+        # the perfect case
+        ari = 1.0
+    else:
+        ari = (
+            (comb_table - comb_a * comb_b / comb_n) /
+            (0.5 * (comb_a + comb_b) - (comb_a * comb_b) / comb_n)
+        )
     
     return ari
     
