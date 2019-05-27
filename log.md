@@ -1,3 +1,17 @@
+# 5-27
+
+I modified the model according to the revised version of the paper. This includes new model architecture, global sigma, input format, dataset generation and so on. This time I trained on full-size images so it takes even longer to train (1.7s per batch, on 4 GPUs), and the training is still undergoing. But model at earlier iterations (50000 or so) already shows a better result. The following reconstructions are from the **older** implementation, at early steps (40000-60000):
+
+![F10](pics/F10.png)
+
+And the following is from the current **modified** implementation:
+
+![F9](pics/F9.png)
+
+Compared this with previous reconstruction result at the same step, we can see the visual quality has significantly improved.
+
+
+
 # 5-21
 
 The author of Multi-Object Representaiont Learning have submitted a revised version on Arxiv last week, in which they clarified many details. There are many differences between their and my implementations, so I will modify mine to match their description. The current results from my implementation below do not seem satisfying, and I think this is due to these implementation details. The following results are from my current implementation.
