@@ -88,6 +88,8 @@ _C.ARCH.REF.CONV_LAYERS = 3
 # Refinement network MLP units
 _C.ARCH.REF.MLP_UNITS = 256
 _C.ARCH.REF.KERNEL_SIZE = 3
+_C.ARCH.REF.STRIDE = 2
+
 
 # Decoder
 _C.ARCH.DEC = CN()

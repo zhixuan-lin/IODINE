@@ -25,7 +25,8 @@ class IODINE(nn.Module):
         input_size, lambda_size = self.get_input_size()
         self.refine = RefinementNetwork(
             input_size, ARCH.REF.CONV_CHAN, ARCH.REF.MLP_UNITS,
-            ARCH.DIM_LATENT, ARCH.REF.CONV_LAYERS, kernel_size=ARCH.REF.KERNEL_SIZE)
+            ARCH.DIM_LATENT, ARCH.REF.CONV_LAYERS, kernel_size=ARCH.REF.KERNEL_SIZE,
+            stride=ARCH.REF.STRIDE)
         self.decoder = Decoder(dim_in=ARCH.DIM_LATENT, dim_hidden=ARCH.DEC.CONV_CHAN,
                                n_layers=ARCH.DEC.CONV_LAYERS, kernel_size=ARCH.DEC.KERNEL_SIZE,
                                img_size=self.img_size)
@@ -51,7 +52,6 @@ class IODINE(nn.Module):
         self.kl = None
         
 
-    @profile
     def forward(self, x):
         """
         :param x: (B, 3, H, W)
@@ -71,7 +71,10 @@ class IODINE(nn.Module):
                     param.grad.data.zero_()
             # compute ELBO
             elbo = self.elbo(x)
-            elbo.backward(retain_graph=True)
+            # note this ELBO is averaged over batch, so way multiply
+            # by batch size to get a summed-over-batch version of elbo
+            # this ensures that inference is invariant to batch size
+            (B * elbo).backward(retain_graph=True)
             elbos.append(elbo)
             
             # get inputs to the refinement network
@@ -81,15 +84,20 @@ class IODINE(nn.Module):
             mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, latent, self.lstm_hidden)
             self.posterior.update(mean_delta, logvar_delta)
             # elbo = self.elbo(x)
-            
+        # final elbo
+        elbo = self.elbo(x)
+        elbos.append(elbo)
+        
         elbo = 0
         for i, e in enumerate(elbos):
             elbo = elbo + (i + 1) / self.n_iters * e
             
+        # record intial posterior guesses:
+        logger.update(init_mean=self.posterior.init_mean.mean())
+        logger.update(init_logvar=self.posterior.init_logvar.mean())
         return -elbo
 
 
-    @profile
     def elbo(self, x):
         """
         Single pass ELBO computation
@@ -124,26 +132,23 @@ class IODINE(nn.Module):
         # sum over (K, L), mean over (B,)
         kl = kl.mean(0).sum()
         
-        # compute pixelwise log likelihood (mixture of Gaussian)
-        # refer to the formula to see why this is the case
-        # (B, 3, H, W)
-        # self.log_likelihood = torch.logsumexp(
-        #     torch.log(self.mask + 1e-12) + gaussian_log_likelihood(x[:, None], self.mean, 0.2),
-        #     dim=1
-        # )
-        # print(gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)).max())
         # self.likelihood (B, K, 3, H, W)
         # self.mask (B, K, 1, H, W) self.mean (B, K, 3, H, W) x (B, 3, H, W)
         # self.log_likelihood (B, 3, H, W)
-        self.likelihood =  gaussian_likelihood(x[:, None], self.mean, self.sigma)
-        self.log_likelihood = (
-            torch.log(
-                torch.sum(
-                    # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
-                    self.mask * self.likelihood,
-                    dim=1
-                )
-            )
+        # self.likelihood =  gaussian_likelihood(x[:, None], self.mean, self.sigma)
+        # self.log_likelihood = (
+        #     torch.log(
+        #         torch.sum(
+        #             # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
+        #             self.mask * self.likelihood,
+        #             dim=1
+        #         )
+        #     )
+        # )
+        
+        self.log_likelihood = torch.logsumexp(
+            torch.log(self.mask + 1e-14) + gaussian_log_likelihood(x[:, None], self.mean, self.sigma),
+            dim=1
         )
         
         
@@ -197,8 +202,10 @@ class IODINE(nn.Module):
             # (B, K, L)
             logvar_grad = self.posterior.logvar.grad.detach()
     
+            logger.update(mag_mean_grad=torch.norm(mean_grad[0][0]))
             if self.use_layernorm:
                 mean_grad = self.layernorm(mean_grad)
+                logger.update(mag_mean_grad_layernorm=torch.norm(mean_grad[0][0]))
                 logvar_grad = self.layernorm(logvar_grad)
             # concat to (B, K, L * 2)
             lambda_grad = torch.cat((mean_grad, logvar_grad), dim=-1)
@@ -213,21 +220,27 @@ class IODINE(nn.Module):
         if 'mask' in self.encodings:
             encoding = torch.cat([encoding, self.mask], dim=2) if encoding is not None else self.mask
         if 'mask_logits' in self.encodings:
-            encoding = torch.cat([encoding, self.mask_logits], dim=2) if encoding is not None else self.mask_l
+            encoding = torch.cat([encoding, self.mask_logits], dim=2) if encoding is not None else self.mask_logits
         if 'mask_posterior' in self.encodings:
             # not implemented
             pass
         if 'grad_means' in self.encodings:
             mean_grad = self.mean.grad.detach()
+            if self.use_layernorm:
+                mean_grad = self.layernorm(mean_grad)
             encoding = torch.cat([encoding, mean_grad], dim=2) if encoding is not None else mean_grad
         if 'grad_mask' in self.encodings:
             mask_grad = self.mask.grad.detach()
+            if self.use_layernorm:
+                mask_grad = self.layernorm(mask_grad)
             encoding = torch.cat([encoding, mask_grad], dim=2) if encoding is not None else mask_grad
         
         if 'likelihood' in self.encodings:
             # (B, 3, H, W)
             log_likelihood = torch.sum(self.log_likelihood, dim=1, keepdim=True)
             log_likelihood = log_likelihood[:, None].repeat(1, self.K, 1, 1, 1)
+            if self.use_layernorm:
+                log_likelihood = self.layernorm(log_likelihood)
             encoding = torch.cat([encoding, log_likelihood], dim=2) if encoding is not None else log_likelihood
             
         if 'leave_one_out_likelihood' in self.encodings:
@@ -282,11 +295,21 @@ class IODINE(nn.Module):
     @staticmethod
     def layernorm(x):
         """
-        :param x: (B, K, L)
+        :param x: (B, K, L) or (B, K, C, H, W)
         :return:
         """
-        layer_mean = x.mean(dim=2, keepdim=True)
-        layer_std = x.std(dim=2, keepdim=True)
+        if len(x.size()) == 3:
+            layer_mean = x.mean(dim=2, keepdim=True)
+            layer_std = x.std(dim=2, keepdim=True)
+        elif len(x.size()) == 5:
+            mean = lambda x: x.mean(2, keepdim=True).mean(3, keepdim=True).mean(4, keepdim=True)
+            layer_mean = mean(x)
+            # this is not implemented in some version of torch
+            layer_std = torch.pow(x - layer_mean, 2)
+            layer_std = torch.sqrt(mean(layer_std))
+        else:
+            assert False, 'invalid size for layernorm'
+            
         x = (x - layer_mean) / (layer_std + 1e-5)
         return x
     
@@ -318,7 +341,6 @@ class Decoder(nn.Module):
         self.conv = nn.Conv2d(dim_hidden, 4, kernel_size=kernel_size, stride=1, padding=padding)
         self.img_size = img_size
         
-    @profile
     def forward(self, x):
         """
         :param x: (B, K, N, H, W), where N is the number of latent dimensions
@@ -344,7 +366,7 @@ class RefinementNetwork(nn.Module):
     """
     Given input encoding, output updates to lambda.
     """
-    def __init__(self, dim_in, dim_conv, dim_hidden, dim_out, n_layers, kernel_size):
+    def __init__(self, dim_in, dim_conv, dim_hidden, dim_out, n_layers, kernel_size, stride):
         """
         :param dim_in: input channels
         :param dim_conv: conv output channels
@@ -353,14 +375,13 @@ class RefinementNetwork(nn.Module):
         """
         nn.Module.__init__(self)
         
-        self.mlc = MultiLayerConv(dim_in, dim_conv, n_layers, kernel_size, stride=2)
+        self.mlc = MultiLayerConv(dim_in, dim_conv, n_layers, kernel_size, stride=stride)
         self.mlp = MLP(dim_conv, dim_hidden, n_layers=1)
         
         self.lstm = nn.LSTMCell(dim_hidden + 4 * dim_out, dim_hidden)
         self.mean_update = nn.Linear(dim_hidden, dim_out)
         self.logvar_update = nn.Linear(dim_hidden, dim_out)
         
-    @profile
     def forward(self, x, latent, hidden=(None, None)):
         """
         :param x: (B, K, D, H, W), where D varies for different input encodings
