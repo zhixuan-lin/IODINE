@@ -7,8 +7,9 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class CLEVR(Dataset):
     def __init__(self, root, mode):
-        path = os.path.join(root, mode)
-        assert os.path.exists(path), 'Path {} does not exist'.format(self.path)
+        # path = os.path.join(root, mode)
+        path = root
+        assert os.path.exists(path), 'Path {} does not exist'.format(path)
         
         self.img_paths = []
         for file in os.scandir(path):
@@ -21,7 +22,7 @@ class CLEVR(Dataset):
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.CenterCrop(192),
-            transforms.Resize(32),
+            transforms.Resize(128),
             transforms.ToTensor()
         ])
         

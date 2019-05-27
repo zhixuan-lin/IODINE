@@ -40,9 +40,9 @@ class Logger:
     
     def update(self, **kargs):
         # detach any tensor
-        for k in kargs:
-            if isinstance(kargs[k], torch.Tensor):
-                kargs[k] = kargs[k].detach().cpu()
+        # for k in kargs:
+        #     if isinstance(kargs[k], torch.Tensor):
+        #         kargs[k] = kargs[k].detach().cpu()
         self.things.update(kargs)
 
 
@@ -76,6 +76,9 @@ class VAEGetter:
         - kl:
         """
         things = self.logger.things
+        for k in things:
+            if isinstance(things[k], torch.Tensor):
+                things[k] = things[k].detach().cpu()
         
         # image = things['image']
         # pred = things['pred']

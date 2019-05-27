@@ -83,7 +83,8 @@ _C.ARCH.ENCODING = [
 _C.ARCH.REF = CN()
 
 # Refinement network Conv channels
-_C.ARCH.REF.CONV_CHAN = 64
+_C.ARCH.REF.CONV_CHAN = 32
+_C.ARCH.REF.CONV_LAYERS = 3
 # Refinement network MLP units
 _C.ARCH.REF.MLP_UNITS = 256
 _C.ARCH.REF.KERNEL_SIZE = 3
@@ -93,9 +94,8 @@ _C.ARCH.DEC = CN()
 
 # Decoder network Conv channels
 _C.ARCH.DEC.CONV_CHAN = 64
-_C.ARCH.DEC.KERNEL_SIZE = 3
-
-
+_C.ARCH.DEC.CONV_LAYERS = 5
+_C.ARCH.DEC.KERNEL_SIZE = 5
 
 
 # -----------------------------------------------------------------------------

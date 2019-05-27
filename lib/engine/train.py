@@ -63,6 +63,7 @@ def train(
             optimizer.step()
             
             batch_time = time.perf_counter() - start_time
+            loss= loss.item()
             meters.update(loss=loss)
             meters.update(batch_time=batch_time)
             
