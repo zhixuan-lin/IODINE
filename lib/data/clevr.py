@@ -23,7 +23,7 @@ class CLEVR(Dataset):
             transforms.ToPILImage(),
             transforms.CenterCrop(192),
             transforms.Resize(128),
-            transforms.ToTensor()
+            transforms.ToTensor(),
         ])
         
         mask = None

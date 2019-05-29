@@ -3,6 +3,7 @@ import torch
 import time
 from lib.utils.metric_logger import MetricLogger
 from lib.engine.eval import evaluate
+from torch.nn.utils import clip_grad_norm_
 import datetime
 
 def train(
@@ -60,6 +61,7 @@ def train(
             loss = loss.mean()
             optimizer.zero_grad()
             loss.backward()
+            clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
             
             batch_time = time.perf_counter() - start_time
