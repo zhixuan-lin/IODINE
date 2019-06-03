@@ -19,10 +19,9 @@ class ARIEvaluator(Evaluator):
         """
         from torch import arange as ar
         image, mask = data
-        model(image)
+        pred, pred_mask, mean = model.reconstruct(image)
         # (B, K, 1, H, W)
         # (B, K, H, W)
-        pred_mask = model.mask
         pred_mask = pred_mask[:, :, 0]
         
         B, K, H, W = pred_mask.size()

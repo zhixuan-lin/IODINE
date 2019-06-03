@@ -1,13 +1,13 @@
 # use all encodings
 EXP:
-  NAME: 'dsprites'
+  NAME: 'clevr6_prop'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
   PARALLEL: True
   DEVICE_IDS: []
 DATASET:
-  TRAIN: "DSPRITES"
+  TRAIN: "CLEVR"
   VAL: "CLEVR"
   TEST: "CLEVR"
 TRAIN:
@@ -25,23 +25,24 @@ VAL:
   BATCH_SIZE: 128
 ARCH:
   ITERS: 5
-  SLOTS: 6
-  SIGMA: 0.14
+  SLOTS: 7
+  SIGMA: 0.10
 
-  DIM_LATENT: 16
-  IMG_SIZE: 64
+  DIM_LATENT: 64
+  IMG_SIZE: 128
   IMG_CHANNELS: 3
   LAYERNORM: True
   STOP_GRADIENT: False
   REF:
-    CONV_CHAN: 32
-    CONV_LAYERS: 3
-    MLP_UNITS: 128
-    KERNEL_SIZE: 5
+    CONV_CHAN: 64
+    CONV_LAYERS: 4
+    MLP_UNITS: 256
+    KERNEL_SIZE: 3
+    STRIDE: 2
   DEC:
-    CONV_CHAN: 32
-    CONV_LAYERS: 5
-    KERNEL_SIZE: 5
+    CONV_CHAN: 64
+    CONV_LAYERS: 4
+    KERNEL_SIZE: 3
   ENCODING: [
     # layer normalized graident of posterior
     'posterior',
@@ -73,8 +74,7 @@ TENSORBOARD:
   IS_ON: True
   TARGETS:
     SCALAR: [
-      "loss", "kl", "likelihood", "var",
-      'mean_grad_norm1', 'mean_grad_norm2']
+      "loss", "kl", "likelihood"]
     IMAGE: [
       'image', 'pred', 'gen',
       'mask_0', 'mask_1', 'mask_2','mask_3', 'mask_4','mask_5','mask_6',

@@ -61,7 +61,7 @@ def train(
             loss = loss.mean()
             optimizer.zero_grad()
             loss.backward()
-            clip_grad_norm_(model.parameters(), 5.0)
+            # clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
             
             batch_time = time.perf_counter() - start_time

@@ -40,6 +40,6 @@ def make_dataset(cfg, mode):
     if cfg.DATASET.TRAIN == 'MNIST':
         return MNIST('data/MNIST', mode)
     elif cfg.DATASET.TRAIN == 'CLEVR':
-        return CLEVR('data/CLEVR/images', mode)
+        return CLEVR('data/CLEVR', mode)
     elif cfg.DATASET.TRAIN == 'DSPRITES':
         return MultiDSprites('data/DSPRITES', mode)

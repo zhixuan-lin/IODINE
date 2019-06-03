@@ -56,6 +56,61 @@ class IODINE(nn.Module):
         #     if isinstance(m, nn.Conv2d):
         #         nn.init.kaiming_normal_(m.weight, mode='fan_out')
         
+    def decode(self, z):
+        """
+        Generate a scene from z
+        """
+        # z: (B, K, L) mean (B, K, 3, H, W) mask_logits (B, K, 1, H, W)
+        mean, mask_logits = self.decoder(z)
+    
+        # (B, K, 1, H, W)
+        mask = F.softmax(mask_logits, dim=1)
+    
+        pred = torch.sum(mask * mean, dim=1)
+        
+        return pred, mask, mean
+    
+    def encode(self, x):
+        """
+        Get z from images
+        :param x: (B, 3, H, W)
+        :return z: (B, K, L)
+        """
+        B, _, H, W = x.size()
+        # self.posterior.init_unit((B, self.K, self.dim_latent), device=x.device)
+        self.posterior.init_unit(B, self.K)
+        self.lstm_hidden = None
+        for i in range(self.n_iters):
+            # compute ELBO
+            elbo = self.elbo(x)
+            # note this ELBO is averaged over batch, so way multiply
+            # by batch size to get a summed-over-batch version of elbo
+            # this ensures that inference is invariant to batch size
+    
+            (B * elbo).backward(retain_graph=False)
+            # get inputs to the refinement network
+            # (B, K, D, H, W), D depends on encoding
+            input, latent = self.get_input_encoding(x)
+    
+            mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, latent, self.lstm_hidden)
+            # nasty detail: detach lambda to prevent backprop through lambda
+            # this is achieve by setting lambda delta and current lambda to be detached,
+            # but new lambda to require grad
+            mean_delta, logvar_delta = [x.detach() for x in (mean_delta, logvar_delta)]
+            self.posterior.update(mean_delta, logvar_delta)
+
+        # finally, sample z
+        z = self.posterior.sample()
+        
+        return z
+    
+    def reconstruct(self, x):
+        
+        z = self.encode(x)
+        pred, mask, mean = self.decode(z)
+        
+        return pred, mask, mean
+        
 
     def forward(self, x):
         """
@@ -64,17 +119,17 @@ class IODINE(nn.Module):
         """
         # logger.update(var=self.logvar.item())
         B, _, H, W = x.size()
-        # initialization, set posterior to prior
         # self.posterior.init_unit((B, self.K, self.dim_latent), device=x.device)
         self.posterior.init_unit(B, self.K)
         self.lstm_hidden = None
         elbos = []
         for i in range(self.n_iters):
             # zero grad
-            for param in self.decoder.parameters():
-                if param.grad is not None:
-                    param.grad.data.zero_()
+            # for param in self.decoder.parameters():
+            #     if param.grad is not None:
+            #         param.grad.data.zero_()
             # compute ELBO
+            
             elbo = self.elbo(x)
             # note this ELBO is averaged over batch, so way multiply
             # by batch size to get a summed-over-batch version of elbo
@@ -88,7 +143,7 @@ class IODINE(nn.Module):
             
             mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, latent, self.lstm_hidden)
             self.posterior.update(mean_delta, logvar_delta)
-            # elbo = self.elbo(x)
+            
         # final elbo
         elbo = self.elbo(x)
         elbos.append(elbo)
@@ -140,15 +195,24 @@ class IODINE(nn.Module):
         # self.likelihood (B, K, 3, H, W)
         # self.mask (B, K, 1, H, W) self.mean (B, K, 3, H, W) x (B, 3, H, W)
         # self.log_likelihood (B, 3, H, W)
-        self.likelihood =  gaussian_likelihood(x[:, None], self.mean, self.sigma)
-        self.log_likelihood = (
-            torch.log(
-                torch.sum(
-                    # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
-                    self.mask * self.likelihood,
-                    dim=1
-                )
-            )
+        # self.likelihood =  gaussian_likelihood(x[:, None], self.mean, self.sigma)
+        # self.log_likelihood = (
+        #     torch.log(
+        #         torch.sum(
+        #             # self.mask * gaussian_likelihood(x[:, None], self.mean, torch.exp(self.logvar)),
+        #             self.mask * self.likelihood,
+        #             dim=1
+        #         )
+        #     )
+        # )
+        
+        # compute pixelwise log likelihood (mixture of Gaussian)
+        self.K_log_likelihood= gaussian_log_likelihood(x[:, None], self.mean, self.sigma)
+        # refer to the formula to see why this is the case
+        # (B, 3, H, W)
+        self.log_likelihood = torch.logsumexp(
+            torch.log(self.mask + 1e-12) + self.K_log_likelihood,
+            dim=1
         )
         
         
@@ -220,14 +284,13 @@ class IODINE(nn.Module):
         if 'mask_logits' in self.encodings:
             encoding = torch.cat([encoding, self.mask_logits], dim=2) if encoding is not None else self.mask_logits
         if 'mask_posterior' in self.encodings:
-            # self.likelihood (B, K, 3, H, W)
+            # self.K_log_likelihood (B, K, 3, H, W)
             # likelihood (B, K, 1, H, W)
-            likelihood = self.likelihood.prod(dim=2, keepdim=True)
+            K_log_likelihood = self.K_log_likelihood.sum(dim=2, keepdim=True)
+            K_likelihood = torch.exp(K_log_likelihood)
             # normalize
-            likelihood = likelihood / likelihood.sum(dim=1, keepdim=True)
-            logger.update(mask_post_mag=torch.abs(likelihood).mean())
-            
-            encoding = torch.cat([encoding, likelihood], dim=2) if encoding is not None else likelihood
+            K_likelihood = K_likelihood / K_likelihood.sum(dim=1, keepdim=True)
+            encoding = torch.cat([encoding, K_likelihood], dim=2) if encoding is not None else K_likelihood
             
         if 'grad_means' in self.encodings:
             mean_grad = self.mean.grad.detach()
@@ -243,7 +306,7 @@ class IODINE(nn.Module):
         if 'likelihood' in self.encodings:
             # self.log_likelihood (B, 3, H, W)
             # log_likelihood (B, 1, H, W)
-            log_likelihood = torch.sum(self.log_likelihood, dim=1, keepdim=True)
+            log_likelihood = torch.sum(self.log_likelihood, dim=1, keepdim=True).detach()
             likelihood = torch.exp(log_likelihood)
             # (B, K, 1, H, W)
             likelihood = likelihood[:, None].repeat(1, self.K, 1, 1, 1)
@@ -253,15 +316,16 @@ class IODINE(nn.Module):
             
         if 'leave_one_out_likelihood' in self.encodings:
             # This computation is a little weird. Basically we do not count one of the slot.
-            # self.likelihood (B, K, 3, H, W)
+            # self.K_log_likelihood (B, K, 3, H, W)
             # K_likelihood = (B, K, 1, H, W)
-            K_likelihood = self.likelihood.prod(dim=2, keepdim=True)
+            K_log_likelihood = self.K_log_likelihood.sum(dim=2, keepdim=True)
+            K_likelihood = torch.exp(K_log_likelihood)
             # likelihood = (B, 1, 1, H, W), self.mask (B, K, 1, H, W)
             likelihood = (self.mask * K_likelihood).sum(dim=1, keepdim=True)
             # leave_one_out (B, K, 1, H, W)
             leave_one_out = likelihood - self.mask * K_likelihood
             # finally, normalize
-            leave_one_out = leave_one_out / (1 - self.mask)
+            leave_one_out = leave_one_out / (1 - self.mask + 1e-5)
             if self.use_layernorm:
                 leave_one_out = self.layernorm(leave_one_out)
             encoding = torch.cat([encoding, leave_one_out], dim=2) if encoding is not None else leave_one_out
@@ -272,7 +336,7 @@ class IODINE(nn.Module):
             yy, xx = torch.meshgrid((yy, xx))
             # (2, H, W)
             coords = torch.stack((xx, yy), dim=0)
-            coords = coords[None, None].repeat(B, self.K, 1, 1, 1)
+            coords = coords[None, None].repeat(B, self.K, 1, 1, 1).detach()
             encoding = torch.cat([encoding, coords], dim=2) if encoding is not None else coords
         
 
@@ -575,8 +639,14 @@ class Gaussian(nn.Module):
         :param logvar_delta: (B, L)
         :return:
         """
-        self.mean = self.mean + mean_delta
-        self.logvar = self.logvar + logvar_delta
+        self.mean = self.mean.detach() + mean_delta
+        self.logvar = self.logvar.detach() + logvar_delta
+        # these are required since during inference, mean_delta and logvar_delta
+        # will be detached
+        if self.mean.requires_grad == False:
+            self.mean.requires_grad = True
+        if self.logvar.requires_grad == False:
+            self.logvar.requires_grad = True
         self.mean.retain_grad()
         self.logvar.retain_grad()
     

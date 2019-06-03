@@ -1,15 +1,5 @@
 # TODO
 
-* Generate dSprite dataset
-* Train on dSprite.
-
-* Figure out CLEVR generation
-* Train on dSprite
-* Train on Tetris
-* Implement ARI score
-* Implement factor regression
-* Implement feature disentanglement
-* Implement generalization score
 
 # Problem
 
@@ -26,3 +16,6 @@
 
 
 Ari: 0.6808787097634481
+
+* Dsprites: 0.7399916374002405
+* IODINE Ari: 0.9661527149751814 
