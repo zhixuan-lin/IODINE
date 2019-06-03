@@ -1,6 +1,5 @@
 import torch
 from .vae import VAE
-from lib.modeling.iter_net import IterNet
 from lib.modeling.iodine import IODINE
 
 def make_model(cfg):
@@ -16,8 +15,6 @@ def make_model(cfg):
 def _make_model(cfg):
     if cfg.MODEL.NAME == 'VAE':
         return VAE(28 * 28, 128)
-    elif cfg.MODEL.NAME == 'Iter':
-        return IterNet(28 * 28, 64)
     elif cfg.MODEL.NAME == 'IODINE':
         return IODINE(cfg.ARCH)
 
