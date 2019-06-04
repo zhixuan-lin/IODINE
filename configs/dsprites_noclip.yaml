@@ -9,7 +9,7 @@ MODEL:
 DATASET:
   TRAIN: "DSPRITES"
   VAL: "CLEVR"
-  TEST: "CLEVR"
+  TEST: "DSPRITES"
 TRAIN:
   RESUME: True
   # per epoch

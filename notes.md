@@ -15,7 +15,6 @@
 * for i in range(5)
 
 
-Ari: 0.6808787097634481
 
 * Dsprites: 0.7399916374002405
-* IODINE Ari: 0.9661527149751814 
+* IODINE Ari: 0.97131
