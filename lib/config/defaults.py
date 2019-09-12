@@ -107,6 +107,7 @@ _C.DATASET = CN()
 _C.DATASET.TRAIN = 'MNIST'
 _C.DATASET.VAL = 'MNIST'
 _C.DATASET.TEST = 'MNIST'
+_C.DATASET.DATA_DIR = './'
 
 
 # -----------------------------------------------------------------------------

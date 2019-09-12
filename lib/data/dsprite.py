@@ -11,7 +11,7 @@ import h5py
 class MultiDSprites(Dataset):
     def __init__(self, root, mode):
         self.root = root
-    
+
     def __getitem__(self, index):
         img_path = os.path.join(self.root, 'images/{}.png'.format(index))
         mask_path = os.path.join(self.root, 'masks/{}.npy'.format(index))
@@ -24,13 +24,13 @@ class MultiDSprites(Dataset):
             # transforms.Resize(32),
             transforms.ToTensor()
         ])
-        
+
         return transform(img).float(), mask
-        
-        
+
+
     def __len__(self):
         return 60000
-    
-    
-    
-    
+
+
+
+
