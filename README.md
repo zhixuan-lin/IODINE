@@ -4,6 +4,33 @@ A Pytorch implementation of the paper [Multi-Object Representation Learning with
 
 The model is trained and tested on the CLEVR6 and multi-dsprites datasets. 
 
+## Training and testing
+
+**Dataset**. Put your own dataset under `data/`. The directory should look like:
+
+```
+data/
+    MYDATASET/
+        pic0.png
+        pic1.png
+        ...
+```
+
+Then in `lib/data/`, write your own dataset class. Dataset class should return image and mask as in `clevr.py`, but you can set mask to `None`. You can directly copy `clevr.py` to accomodate your dataset. After that, in `lib/data/build.py`, add your dataset to the `make_dataset` function.
+
+**Configuration**. Configuration files should in folder `config`. See `configs/clevr6_prop.yaml`. To train the model in your own dataset, you will need to modify dataset names in the `.yaml` files. The name should be the one your choose in the `make_dataset` function.
+
+**Training.** Run 
+
+```
+python tools/train_net.py --config-file [PATH_TO_CONFIG_FILE]
+```
+
+to train. For example, `python tools/train_net.py --config-file configs/clevr6_prop.yaml`
+
+**Visualization**. Just `tensorboard --logdir=logs --port=6006`.
+
+
 ## Results
 
 **Decomposition**. The model learns to decompose objects into seperate images. Also, segmentation masks are learned. Results on CLEVR6:
