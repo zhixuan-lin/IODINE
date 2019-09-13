@@ -1,6 +1,6 @@
 # use all encodings
 EXP:
-  NAME: 'obj3d_small'
+  NAME: 'iodine__sigma_0.25'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
@@ -10,12 +10,12 @@ DATASET:
   TRAIN: "OBJ3D"
   VAL: "OBJ3D"
   TEST: "OBJ3D"
-  DATA_DIR: "/data/public/rw/yifu/oomba_3d/7_objects_all_rand_2019-09-07"
+  DATA_DIR: "/data/private/datasets/oomba_mini_2019-09-13"
 TRAIN:
   RESUME: True
   # per epoch
   CHECKPOINT_PERIOD: 10
-  BATCH_SIZE: 32
+  BATCH_SIZE: 16
   MAX_EPOCHS: 1000
   BASE_LR: 3e-4
   WEIGHT_DECAY: 0.0000
@@ -27,7 +27,7 @@ VAL:
 ARCH:
   ITERS: 5
   SLOTS: 7
-  SIGMA: 0.10
+  SIGMA: 0.25
 
   DIM_LATENT: 64
   IMG_SIZE: 128
@@ -72,12 +72,11 @@ ARCH:
 
 
 TENSORBOARD:
+  LOG_DIR: "/data/private/tensorboard/"
   IS_ON: True
   TARGETS:
     SCALAR: [
       "loss", "kl", "likelihood"]
     IMAGE: [
-      'image', 'pred', 'gen',
-      'mask_0', 'mask_1', 'mask_2','mask_3', 'mask_4','mask_5','mask_6',
-      'pred_0', 'pred_1', 'pred_2','pred_3', 'pred_4','pred_5','pred_6',
+      'grid'
       ]

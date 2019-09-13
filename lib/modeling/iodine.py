@@ -3,6 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import numpy as np
 from lib.utils.vis_logger import logger
+from torchvision.utils import make_grid
 
 class IODINE(nn.Module):
     def __init__(self, ARCH):
@@ -19,8 +20,8 @@ class IODINE(nn.Module):
         self.use_layernorm = ARCH.LAYERNORM
         # use stop gradient? (not availabe now)
         self.use_stop_gradient = ARCH.STOP_GRADIENT
-        
-        
+
+
         # architecture
         input_size, lambda_size = self.get_input_size()
         self.refine = RefinementNetwork(
@@ -31,11 +32,11 @@ class IODINE(nn.Module):
                                n_layers=ARCH.DEC.CONV_LAYERS, kernel_size=ARCH.DEC.KERNEL_SIZE,
                                img_size=self.img_size)
         self.posterior = Gaussian(self.dim_latent)
-        
-        
+
+
         # lstm hidden states
         self.lstm_hidden = None
-        
+
         # these states are necessary for input encoding
         self.z = None
         # output mean
@@ -50,26 +51,26 @@ class IODINE(nn.Module):
         self.log_likelihood = None
         # kl divergence KL(p(z_k|x)||p(z_k))
         self.kl = None
-        
+
         # weight initialization
         # for m in self.modules():
         #     if isinstance(m, nn.Conv2d):
         #         nn.init.kaiming_normal_(m.weight, mode='fan_out')
-        
+
     def decode(self, z):
         """
         Generate a scene from z
         """
         # z: (B, K, L) mean (B, K, 3, H, W) mask_logits (B, K, 1, H, W)
         mean, mask_logits = self.decoder(z)
-    
+
         # (B, K, 1, H, W)
         mask = F.softmax(mask_logits, dim=1)
-    
+
         pred = torch.sum(mask * mean, dim=1)
-        
+
         return pred, mask, mean
-    
+
     def encode(self, x):
         """
         Get z from images
@@ -86,12 +87,12 @@ class IODINE(nn.Module):
             # note this ELBO is averaged over batch, so way multiply
             # by batch size to get a summed-over-batch version of elbo
             # this ensures that inference is invariant to batch size
-    
+
             (B * elbo).backward(retain_graph=False)
             # get inputs to the refinement network
             # (B, K, D, H, W), D depends on encoding
             input, latent = self.get_input_encoding(x)
-    
+
             mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, latent, self.lstm_hidden)
             # nasty detail: detach lambda to prevent backprop through lambda
             # this is achieve by setting lambda delta and current lambda to be detached,
@@ -101,16 +102,16 @@ class IODINE(nn.Module):
 
         # finally, sample z
         z = self.posterior.sample()
-        
+
         return z
-    
+
     def reconstruct(self, x):
-        
+
         z = self.encode(x)
         pred, mask, mean = self.decode(z)
-        
+
         return pred, mask, mean
-        
+
 
     def forward(self, x):
         """
@@ -129,29 +130,29 @@ class IODINE(nn.Module):
             #     if param.grad is not None:
             #         param.grad.data.zero_()
             # compute ELBO
-            
+
             elbo = self.elbo(x)
             # note this ELBO is averaged over batch, so way multiply
             # by batch size to get a summed-over-batch version of elbo
             # this ensures that inference is invariant to batch size
             (B * elbo).backward(retain_graph=True)
             elbos.append(elbo)
-            
+
             # get inputs to the refinement network
             # (B, K, D, H, W), D depends on encoding
             input, latent = self.get_input_encoding(x)
-            
+
             mean_delta, logvar_delta, self.lstm_hidden = self.refine(input, latent, self.lstm_hidden)
             self.posterior.update(mean_delta, logvar_delta)
-            
+
         # final elbo
         elbo = self.elbo(x)
         elbos.append(elbo)
-        
+
         elbo = 0
         for i, e in enumerate(elbos):
             elbo = elbo + (i + 1) / len(elbos) * e
-            
+
         # record intial posterior guesses:
         logger.update(init_mean=self.posterior.init_mean.mean())
         logger.update(init_logvar=self.posterior.init_logvar.mean())
@@ -165,7 +166,7 @@ class IODINE(nn.Module):
         :return: elbo, scalar
         """
         B, C, H, W = x.size()
-        
+
         # sample K latent variables
         # (B, K, L)
         self.z = self.posterior.sample()
@@ -173,25 +174,25 @@ class IODINE(nn.Module):
         # spatial broadcast
         # (B, K, L + 2, H, W)
         # z_broadcast = self.broadcast(self.z, W, H)
-        
+
         # compute mask and mean
         # (B, K, 3, H, W), (B, K, 1, H, W)
         self.mean, self.mask_logits = self.decoder(self.z)
-        
+
         self.mean.retain_grad()
-        
+
         # softmax mask
         # (B, K, 1, H, W)
         self.mask = F.softmax(self.mask_logits, dim=1)
-        
+
         self.mask.retain_grad()
-        
+
         # compute kl divergence
         # (B, K, L)
         kl = self.posterior.kl_divergence()
         # sum over (K, L), mean over (B,)
         kl = kl.mean(0).sum()
-        
+
         # self.likelihood (B, K, 3, H, W)
         # self.mask (B, K, 1, H, W) self.mean (B, K, 3, H, W) x (B, 3, H, W)
         # self.log_likelihood (B, 3, H, W)
@@ -205,7 +206,7 @@ class IODINE(nn.Module):
         #         )
         #     )
         # )
-        
+
         # compute pixelwise log likelihood (mixture of Gaussian)
         self.K_log_likelihood= gaussian_log_likelihood(x[:, None], self.mean, self.sigma)
         # refer to the formula to see why this is the case
@@ -214,11 +215,11 @@ class IODINE(nn.Module):
             torch.log(self.mask + 1e-12) + self.K_log_likelihood,
             dim=1
         )
-        
-        
+
+
         # sum over (3, H, W), mean over B
         log_likelihood = self.log_likelihood.mean(0).sum()
-        
+
         # ELBO
         elbo = log_likelihood - kl
         # elbo = log_likelihood
@@ -227,25 +228,36 @@ class IODINE(nn.Module):
         logger.update(pred=pred[0])
         logger.update(kl=kl)
         logger.update(likelihood=log_likelihood)
-        
-        masks = {}
-        for i in range(self.K):
-            masks['mask_{}'.format(i)] = self.mask[0, i, 0]
-        preds = {}
-        for i in range(self.K):
-            preds['pred_{}'.format(i)] = self.mean[0, i]
-            
-        logger.update(**masks)
-        logger.update(**preds)
-        
+
+        imgs = x[:6].cpu().detach()
+        # (B, 1, 3, H, W)
+        imgs = imgs[:, None]
+        recons = pred[:6].cpu().detach()
+        # (B, 1, 3, H, W)
+        recons = recons[:, None]
+        # (B, K, 3, H, W)
+        img_comp = self.mean[:6].cpu().detach()
+        # (B, K, 1, H, W)
+        masks = self.mask[:6].cpu().detach().expand_as(img_comp)
+
+        # (B, K, 3, H, W)
+        masked = img_comp * masks
+
+        # (B, 1+1+K+K, 3, H, W)
+        vis = torch.cat([imgs, recons, masked, img_comp, masks, ], dim=1)
+        vis = vis.view(6*(2+3*self.K), 3, H, W)
+        grid = make_grid(vis, nrow=(2+3*self.K))
+
+        logger.update(grid=grid)
+
         return elbo
-        
+
     def get_input_encoding(self, x):
         """
         :param x: (B, 3, H, W)
         :return: (B, K, D, H, W), D depends on encoding scheme
         """
-        
+
         encoding = None
         latent = None
         B, C, H, W = x.size()
@@ -257,7 +269,7 @@ class IODINE(nn.Module):
             logvar = self.posterior.logvar
             # concat to (B, K, L * 2)
             lambda_post = torch.cat((mean, logvar), dim=-1)
-    
+
             latent = torch.cat((latent, lambda_post), dim=2) if latent is not None else lambda_post
 
         if 'grad_post' in self.encodings:
@@ -265,13 +277,13 @@ class IODINE(nn.Module):
             mean_grad = self.posterior.mean.grad.detach()
             # (B, K, L)
             logvar_grad = self.posterior.logvar.grad.detach()
-    
+
             if self.use_layernorm:
                 mean_grad = self.layernorm(mean_grad)
                 logvar_grad = self.layernorm(logvar_grad)
             # concat to (B, K, L * 2)
             lambda_grad = torch.cat((mean_grad, logvar_grad), dim=-1)
-    
+
             latent = torch.cat([latent, lambda_grad], dim=2) if latent is not None else lambda_grad
 
         if 'image' in self.encodings:
@@ -291,7 +303,7 @@ class IODINE(nn.Module):
             # normalize
             K_likelihood = K_likelihood / K_likelihood.sum(dim=1, keepdim=True)
             encoding = torch.cat([encoding, K_likelihood], dim=2) if encoding is not None else K_likelihood
-            
+
         if 'grad_means' in self.encodings:
             mean_grad = self.mean.grad.detach()
             if self.use_layernorm:
@@ -302,7 +314,7 @@ class IODINE(nn.Module):
             if self.use_layernorm:
                 mask_grad = self.layernorm(mask_grad)
             encoding = torch.cat([encoding, mask_grad], dim=2) if encoding is not None else mask_grad
-        
+
         if 'likelihood' in self.encodings:
             # self.log_likelihood (B, 3, H, W)
             # log_likelihood (B, 1, H, W)
@@ -313,7 +325,7 @@ class IODINE(nn.Module):
             if self.use_layernorm:
                 likelihood = self.layernorm(likelihood)
             encoding = torch.cat([encoding, likelihood], dim=2) if encoding is not None else likelihood
-            
+
         if 'leave_one_out_likelihood' in self.encodings:
             # This computation is a little weird. Basically we do not count one of the slot.
             # self.K_log_likelihood (B, K, 3, H, W)
@@ -329,7 +341,7 @@ class IODINE(nn.Module):
             if self.use_layernorm:
                 leave_one_out = self.layernorm(leave_one_out)
             encoding = torch.cat([encoding, leave_one_out], dim=2) if encoding is not None else leave_one_out
-        
+
         if 'coordinate' in self.encodings:
             xx = torch.linspace(-1, 1, W, device=x.device)
             yy = torch.linspace(-1, 1, H, device=x.device)
@@ -338,10 +350,10 @@ class IODINE(nn.Module):
             coords = torch.stack((xx, yy), dim=0)
             coords = coords[None, None].repeat(B, self.K, 1, 1, 1).detach()
             encoding = torch.cat([encoding, coords], dim=2) if encoding is not None else coords
-        
+
 
         return encoding.detach(), latent.detach()
-    
+
     def get_input_size(self):
         size = 0
         latent = 0
@@ -349,7 +361,7 @@ class IODINE(nn.Module):
             latent += 2 * self.dim_latent
         if 'posterior' in self.encodings:
             latent += 2 * self.dim_latent
-            
+
         if 'image' in self.encodings:
             size += self.img_channels
         if 'means' in self.encodings:
@@ -370,9 +382,9 @@ class IODINE(nn.Module):
             size += 1
         if 'coordinate' in self.encodings:
             size += 2
-            
+
         return size, latent
-    
+
     @staticmethod
     def layernorm(x):
         """
@@ -390,23 +402,23 @@ class IODINE(nn.Module):
             layer_std = torch.sqrt(mean(layer_std))
         else:
             assert False, 'invalid size for layernorm'
-            
+
         x = (x - layer_mean) / (layer_std + 1e-5)
         return x
-    
+
     @staticmethod
     def stop_gradient(x, threshold=5.0):
         """
         :param x: (B, K, L)
         :return: (B, K, L)
         """
-        
+
         norm = torch.norm(x, dim=2)
         indices = norm > threshold
         x[indices, :] = x[indices, :] / norm[indices][:,None] * threshold
-        
+
         return x
-        
+
 
 
 class Decoder(nn.Module):
@@ -415,13 +427,13 @@ class Decoder(nn.Module):
     """
     def __init__(self, dim_in, dim_hidden, n_layers, kernel_size, img_size):
         nn.Module.__init__(self)
-        
+
         padding = kernel_size // 2
         self.broadcast = SpatialBroadcast()
         self.mlc = MultiLayerConv(dim_in + 2, dim_hidden, n_layers, kernel_size)
         self.conv = nn.Conv2d(dim_hidden, 4, kernel_size=kernel_size, stride=1, padding=padding)
         self.img_size = img_size
-        
+
     def forward(self, x):
         """
         :param x: (B, K, N, H, W), where N is the number of latent dimensions
@@ -429,11 +441,11 @@ class Decoder(nn.Module):
         """
         B, K, *ORI = x.size()
         x = x.view(B*K, *ORI)
-        
+
         x = self.broadcast(x, self.img_size, self.img_size)
         x = self.mlc(x)
         x = self.conv(x)
-        
+
         mean, mask = torch.split(x, [3, 1], dim=1)
         mean = torch.sigmoid(mean)
 
@@ -442,7 +454,7 @@ class Decoder(nn.Module):
         BK, *ORI = mask.size()
         mask = mask.view(B, K, *ORI)
         return mean, mask
-    
+
 class RefinementNetwork(nn.Module):
     """
     Given input encoding, output updates to lambda.
@@ -455,14 +467,14 @@ class RefinementNetwork(nn.Module):
         :param dim_out: latent variable dimension
         """
         nn.Module.__init__(self)
-        
+
         self.mlc = MultiLayerConv(dim_in, dim_conv, n_layers, kernel_size, stride=stride)
         self.mlp = MLP(dim_conv, dim_hidden, n_layers=1)
-        
+
         self.lstm = nn.LSTMCell(dim_hidden + 4 * dim_out, dim_hidden)
         self.mean_update = nn.Linear(dim_hidden, dim_out)
         self.logvar_update = nn.Linear(dim_hidden, dim_out)
-        
+
     def forward(self, x, latent, hidden=(None, None)):
         """
         :param x: (B, K, D, H, W), where D varies for different input encodings
@@ -475,7 +487,7 @@ class RefinementNetwork(nn.Module):
         x = x.view(B*K, *ORI)
         B, K, *ORI = latent.size()
         latent = latent.view(B*K, *ORI)
-        
+
         # (BK, D, H, W)
         x = self.mlc(x)
         x = F.adaptive_avg_pool2d(x, (1, 1))
@@ -486,11 +498,11 @@ class RefinementNetwork(nn.Module):
         # concatenate
         x = torch.cat((x, latent), dim=1)
         (c, h) = self.lstm(x, hidden)
-        
+
         # update
         mean_delta = self.mean_update(h)
         logvar_delta = self.logvar_update(h)
-        
+
         BK, *ORI = mean_delta.size()
         mean_delta = mean_delta.view(B, K, *ORI)
         BK, *ORI = logvar_delta.size()
@@ -499,16 +511,16 @@ class RefinementNetwork(nn.Module):
         # c = c.view(B, K, *ORI)
         # BK, *ORI = h.size()
         # h = h.view(B, K, *ORI)
-        
+
         return mean_delta, logvar_delta, (c, h)
-    
+
 class SpatialBroadcast(nn.Module):
     """
     Broadcast a 1-D variable to 3-D, plus two coordinate dimensions
     """
     def __init__(self):
         nn.Module.__init__(self)
-        
+
     def forward(self, x, width, height):
         """
         :param x: (B, L)
@@ -533,29 +545,29 @@ class SpatialBroadcast(nn.Module):
 
         # (B, L + 2, W, H)
         x = torch.cat((x, coords), dim=1)
-            
+
         # BK, *ORI = x.size()
         # x = x.view(B, K, *ORI)
-        
+
         return x
-        
-    
+
+
 class MLP(nn.Module):
     """
     Multi-layer perception using elu
     """
-    
+
     def __init__(self, dim_in, dim_out, n_layers):
         nn.Module.__init__(self)
         self.dim_in = dim_in
         self.dim_out = dim_out
-        
+
         self.layers = nn.ModuleList([])
-        
+
         for i in range(n_layers):
             self.layers.append(nn.Linear(dim_in, dim_out))
             dim_in = dim_out
-            
+
     def forward(self, x):
         """
         :param x: (B, Din)
@@ -563,9 +575,9 @@ class MLP(nn.Module):
         """
         for layer in self.layers:
             x = F.elu(layer(x))
-            
+
         return x
-    
+
 
 class MultiLayerConv(nn.Module):
     """
@@ -575,10 +587,10 @@ class MultiLayerConv(nn.Module):
         nn.Module.__init__(self)
         self.dim_in = dim_in
         self.dim_out = dim_out
-    
+
         self.layers = nn.ModuleList([])
         padding = kernel_size // 2
-    
+
         for i in range(n_layers):
             self.layers.append(nn.Conv2d(dim_in, dim_out, kernel_size=kernel_size, padding=padding, stride=stride))
             dim_in = dim_out
@@ -590,19 +602,19 @@ class MultiLayerConv(nn.Module):
         """
         for layer in self.layers:
             x = F.elu(layer(x))
-    
+
         return x
-    
+
 class Gaussian(nn.Module):
     def __init__(self, dim_latent):
         nn.Module.__init__(self)
         self.mean = None
         self.logvar = None
-        
+
         # prior mean
         self.init_mean = nn.Parameter(data=torch.zeros(dim_latent))
         self.init_logvar = nn.Parameter(data=torch.zeros(dim_latent))
-        
+
     # def init_unit(self, size, device):
     def init_unit(self, B, K):
         """
@@ -616,7 +628,7 @@ class Gaussian(nn.Module):
         self.logvar = self.init_logvar[None, None].repeat(B, K, 1)
         self.mean.retain_grad()
         self.logvar.retain_grad()
-    
+
     def sample(self):
         """
         Sample from current mean and dev
@@ -624,15 +636,15 @@ class Gaussian(nn.Module):
         """
         # log deviation
         logdev = 0.5 * self.logvar
-        
+
         # standard deviation
         dev = torch.exp(logdev)
-        
+
         # add dimension
         epsilon = torch.randn_like(self.mean, device=self.mean.device)
-        
+
         return self.mean + dev * epsilon
-    
+
     def update(self, mean_delta, logvar_delta):
         """
         :param mean_delta: (B, L)
@@ -649,7 +661,7 @@ class Gaussian(nn.Module):
             self.logvar.requires_grad = True
         self.mean.retain_grad()
         self.logvar.retain_grad()
-    
+
     def kl_divergence(self):
         """
         Compute dimension-wise KL divergence between estimated dist and standrad gaussian
@@ -657,7 +669,7 @@ class Gaussian(nn.Module):
         var = torch.exp(self.logvar)
         kl = 0.5 * (var + self.mean ** 2 - 1 - self.logvar)
         return kl
-    
+
 def gaussian_log_likelihood(x, loc, scale):
     """
     Dimension-wise log likelihood
