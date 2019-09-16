@@ -1,10 +1,10 @@
 # use all encodings
 EXP:
-  NAME: 'iodine__slot_11__sigma__0.22'
+  NAME: 'iodine__slot_11__sigma__0.18'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
-  PARALLEL: True
+  PARALLEL: False
   DEVICE_IDS: []
 DATASET:
   TRAIN: "OBJ3D"
@@ -23,11 +23,11 @@ TRAIN:
   VAL_EVERY: 1000
 VAL:
   IS_ON: False
-  BATCH_SIZE: 128
+  BATCH_SIZE: 13
 ARCH:
   ITERS: 5
   SLOTS: 11
-  SIGMA: 0.22
+  SIGMA: 0.18
 
   DIM_LATENT: 64
   IMG_SIZE: 128

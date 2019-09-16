@@ -44,17 +44,17 @@ def train(
     for epoch in range(start_epoch, max_epochs):
         epoch = epoch + 1
 
-        for iter, data in enumerate(dataloader):
+        for idx, data in enumerate(dataloader):
             model.train()
 
             # Note, first one is image. This is not neat. Just for convenience.
             data = data[0]
             batch_size = data.size()[0]
 
-            if iter > len(dataloader):
+            if idx > len(dataloader):
                 break
-            iter = iter + 1
-            global_iter = epoch * len(dataloader) + iter
+            idx = idx + 1
+            global_iter = epoch * len(dataloader) + idx
 
             start_time = time.perf_counter()
             data = data.to(device)
@@ -71,7 +71,7 @@ def train(
             meters.update(batch_time=batch_time)
 
             # display logs
-            if iter % print_every == 0:
+            if idx % print_every == 0:
                 # we will compute estimated time
                 eta = (max_iter - global_iter) * meters['batch_time'].global_avg
                 # print(max_iter, global_iter, batch_time)
@@ -79,29 +79,29 @@ def train(
                 print(meters.delimiter.join([
                     'eta: {eta}',
                     'epoch: {epoch}',
-                    'iter: {iter}',
+                    'iter: {idx}',
                     'loss: {loss:.4f}',
                     'batch-time: {batch_time:.4f}s',
                     'lr: {lr}'
                 ]).format(
                     eta=eta,
                     epoch=epoch,
-                    iter=iter,
+                    idx=idx,
                     loss=meters['loss'].median,
                     batch_time=meters['batch_time'].median,
                     lr=optimizer.param_groups[0]['lr']
                 ))
 
-                with torch.no_grad():
-                    model.eval()
-                    data = next(iter(dataloader_val))
-                    data = data.to(device)
-                    loss = model(data)
+                model.eval()
+                data = next(iter(dataloader_val))
+                data = data[0]
+                data = data.to(device)
+                model.reconstruct(data)
 
                 # tensorboard
                 tb_data = getter.get_tensorboard_data()
                 if not tensorboard is None:
-                    tensorboard.update(var=model.module.sigma)
+                    tensorboard.update(var=model.sigma)
                     tensorboard.update(loss=meters['loss'].median)
                     tensorboard.update(time_per_iteration=meters['batch_time'].global_avg / batch_size)
                     tensorboard.update(med_time_per_iteration=meters['batch_time'].median / batch_size)

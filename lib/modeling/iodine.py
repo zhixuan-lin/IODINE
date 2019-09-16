@@ -106,9 +106,30 @@ class IODINE(nn.Module):
         return z
 
     def reconstruct(self, x):
+        B, _, H, W = x.size()
 
         z = self.encode(x)
         pred, mask, mean = self.decode(z)
+
+        imgs = x[:6].cpu().detach()
+        # (B, 1, 3, H, W)
+        imgs = imgs[:, None]
+        recons = pred[:6].cpu().detach()
+        # (B, 1, 3, H, W)
+        recons = recons[:, None]
+        # (B, K, 3, H, W)
+        img_comp = mean[:6].cpu().detach()
+        # (B, K, 1, H, W)
+        masks = mask[:6].cpu().detach().expand_as(img_comp)
+
+        # (B, K, 3, H, W)
+        masked = img_comp * masks
+
+        # (B, 1+1+K+K, 3, H, W)
+        vis = torch.cat([imgs, recons, masked, img_comp, masks, ], dim=1)
+        vis = vis.view(len(imgs)*(2+3*self.K), 3, H, W)
+        grid = make_grid(vis, nrow=(2+3*self.K))
+        logger.update(val_grid=grid)
 
         return pred, mask, mean
 
@@ -248,11 +269,7 @@ class IODINE(nn.Module):
         vis = vis.view(len(imgs)*(2+3*self.K), 3, H, W)
         grid = make_grid(vis, nrow=(2+3*self.K))
 
-        if self.training:
-            logger.update(train_grid=grid)
-        else:
-            logger.update(val_grid=grid)
-
+        logger.update(train_grid=grid)
 
         return elbo
 
