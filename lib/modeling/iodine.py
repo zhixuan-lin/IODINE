@@ -248,7 +248,11 @@ class IODINE(nn.Module):
         vis = vis.view(len(imgs)*(2+3*self.K), 3, H, W)
         grid = make_grid(vis, nrow=(2+3*self.K))
 
-        logger.update(grid=grid)
+        if self.training:
+            logger.update(train_grid=grid)
+        else:
+            logger.update(val_grid=grid)
+
 
         return elbo
 

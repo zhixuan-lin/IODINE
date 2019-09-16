@@ -83,5 +83,6 @@ TENSORBOARD:
       "med_time_per_iteration"
       ]
     IMAGE: [
-      'grid'
+      'train_grid',
+      'val_grid',
       ]

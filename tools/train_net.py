@@ -4,7 +4,7 @@ import os
 
 if not '.' in sys.path:
     sys.path.insert(0, '.')
-    
+
 from lib.config.parse import parse
 from lib.data import make_dataloader
 from lib.eval import make_evaluator
@@ -18,18 +18,18 @@ from lib.utils.vis_logger import make_getter
 from lib.config import cfg
 
 def train_net(cfg):
-    
+
     """
     General training procedure
     """
-    
+
     # model
     model = make_model(cfg)
-    
+
     optimizer = make_optimizer(cfg, model)
     scheduler = make_scheduler(cfg, model)
     dataloader = make_dataloader(cfg, mode='train')
-    
+
     # checkpointer
     args = {'epoch': 0, 'iter': 0}
     save_dir = os.path.join(cfg.MODEL_DIR, cfg.EXP.NAME)
@@ -43,7 +43,7 @@ def train_net(cfg):
     )
     if cfg.TRAIN.RESUME:
         checkpointer.load()
-    
+
     # tensorboard and visualization
     tensorboard = None
     getter = None
@@ -56,12 +56,10 @@ def train_net(cfg):
             resume=cfg.TRAIN.RESUME
         )
         getter = make_getter(cfg)
-    
+
     # validation
-    dataloader_val, evaluator = None, None
-    if cfg.VAL.IS_ON:
-        dataloader_val = make_dataloader(cfg, 'val')
-        evaluator = make_evaluator(cfg)
+    dataloader_val = make_dataloader(cfg, 'val')
+    evaluator = None
     # training parameters
     params = {
         'max_epochs': cfg.TRAIN.MAX_EPOCHS,
@@ -69,7 +67,7 @@ def train_net(cfg):
         'print_every': cfg.TRAIN.PRINT_EVERY,
         'val_every': cfg.TRAIN.VAL_EVERY
     }
-    
+
     train(
         model,
         optimizer,
@@ -82,7 +80,7 @@ def train_net(cfg):
         dataloader_val=dataloader_val,
         evaluator=evaluator
     )
-    
+
     return model
 
 if __name__ == '__main__':

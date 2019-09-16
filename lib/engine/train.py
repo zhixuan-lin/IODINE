@@ -43,9 +43,9 @@ def train(
     print('Start training')
     for epoch in range(start_epoch, max_epochs):
         epoch = epoch + 1
-        model.train()
 
         for iter, data in enumerate(dataloader):
+            model.train()
 
             # Note, first one is image. This is not neat. Just for convenience.
             data = data[0]
@@ -92,6 +92,12 @@ def train(
                     lr=optimizer.param_groups[0]['lr']
                 ))
 
+                with torch.no_grad():
+                    model.eval()
+                    data = next(iter(dataloader_val))
+                    data = data.to(device)
+                    loss = model(data)
+
                 # tensorboard
                 tb_data = getter.get_tensorboard_data()
                 if not tensorboard is None:
@@ -100,13 +106,10 @@ def train(
                     tensorboard.update(time_per_iteration=meters['batch_time'].global_avg / batch_size)
                     tensorboard.update(med_time_per_iteration=meters['batch_time'].median / batch_size)
                     tensorboard.update(**tb_data)
-                    tensorboard.add('train', global_iter)
+                    tensorboard.add('data', global_iter)
 
             # checkpoint
         if checkpointer is not None:
             checkpointer.args['epoch'] = epoch
             checkpointer.save('model_{:04d}'.format(epoch))
 
-        if dataloader_val is not None and evaluator is not None:
-            evaluate(model, device, dataloader_val, evaluator)
-            tensorboard.update(**evaluator.get_result_dict())
