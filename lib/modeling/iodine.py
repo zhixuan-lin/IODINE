@@ -245,7 +245,7 @@ class IODINE(nn.Module):
 
         # (B, 1+1+K+K, 3, H, W)
         vis = torch.cat([imgs, recons, masked, img_comp, masks, ], dim=1)
-        vis = vis.view(6*(2+3*self.K), 3, H, W)
+        vis = vis.view(len(imgs)*(2+3*self.K), 3, H, W)
         grid = make_grid(vis, nrow=(2+3*self.K))
 
         logger.update(grid=grid)
