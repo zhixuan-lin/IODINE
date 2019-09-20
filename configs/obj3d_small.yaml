@@ -1,6 +1,6 @@
 # use all encodings
 EXP:
-  NAME: 'iodine__slot_11__sigma__0.18'
+  NAME: 'iodine__test3'
 MODEL:
   NAME: "IODINE"
   DEVICE: "cuda"
@@ -10,12 +10,12 @@ DATASET:
   TRAIN: "OBJ3D"
   VAL: "OBJ3D"
   TEST: "OBJ3D"
-  DATA_DIR: "/data/public/rw/yifu/oomba_3d/7_objects_2019-13_a"
+  DATA_DIR: "/data/public/rw/yifu/oomba_3d/many_objects_2019-09-13"
 TRAIN:
   RESUME: True
   # per epoch
-  CHECKPOINT_PERIOD: 10
-  BATCH_SIZE: 13
+  CHECKPOINT_PERIOD: 200
+  BATCH_SIZE: 8
   MAX_EPOCHS: 1000
   BASE_LR: 3e-4
   WEIGHT_DECAY: 0.0000
@@ -23,11 +23,11 @@ TRAIN:
   VAL_EVERY: 1000
 VAL:
   IS_ON: False
-  BATCH_SIZE: 13
+  BATCH_SIZE: 1
 ARCH:
   ITERS: 5
-  SLOTS: 11
-  SIGMA: 0.18
+  SLOTS: 16
+  SIGMA: 0.25
 
   DIM_LATENT: 64
   IMG_SIZE: 128
@@ -80,9 +80,13 @@ TENSORBOARD:
       "kl",
       "likelihood",
       "time_per_iteration",
-      "med_time_per_iteration"
+      "med_time_per_iteration",
+      "mse",
+      "val_mse"
       ]
     IMAGE: [
       'train_grid',
       'val_grid',
       ]
+
+MODEL_DIR: "/data/private/checkpoints"

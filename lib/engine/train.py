@@ -29,7 +29,7 @@ def train(
     max_epochs = params.get('max_epochs')
     print_every = params.get('print_every', 100)
     # val_every = params.get('val_every', 100)
-    # checkpoint_period = params.get('checkpoint_period')
+    checkpoint_period = params.get('checkpoint_period')
 
     # start from where we left
     start_epoch = 0
@@ -92,12 +92,6 @@ def train(
                     lr=optimizer.param_groups[0]['lr']
                 ))
 
-                model.eval()
-                data = next(iter(dataloader_val))
-                data = data[0]
-                data = data.to(device)
-                model.reconstruct(data)
-
                 # tensorboard
                 tb_data = getter.get_tensorboard_data()
                 if not tensorboard is None:
@@ -106,10 +100,27 @@ def train(
                     tensorboard.update(time_per_iteration=meters['batch_time'].global_avg / batch_size)
                     tensorboard.update(med_time_per_iteration=meters['batch_time'].median / batch_size)
                     tensorboard.update(**tb_data)
-                    tensorboard.add('data', global_iter)
+                    tensorboard.add('train', global_iter)
+
+                with torch.no_grad():
+                    model.eval()
+                    data = next(iter(dataloader_val))
+                    data = data[0]
+                    data = data.to(device)
+                    model(data)
+
+                    # tensorboard
+                    tb_data = getter.get_tensorboard_data()
+                    if not tensorboard is None:
+                        tensorboard.update(var=model.sigma)
+                        tensorboard.update(loss=meters['loss'].median)
+                        tensorboard.update(time_per_iteration=meters['batch_time'].global_avg / batch_size)
+                        tensorboard.update(med_time_per_iteration=meters['batch_time'].median / batch_size)
+                        tensorboard.update(**tb_data)
+                        tensorboard.add('valid', global_iter)
 
             # checkpoint
-        if checkpointer is not None:
-            checkpointer.args['epoch'] = epoch
-            checkpointer.save('model_{:04d}'.format(epoch))
-
+            if (idx + 1) % checkpoint_period == 0 and checkpointer is not None:
+                checkpointer.args['epoch'] = epoch
+                checkpointer.args['iter'] = idx
+                checkpointer.save('model_{:04d}_{:06d}'.format(epoch, idx))

@@ -111,6 +111,9 @@ class IODINE(nn.Module):
         z = self.encode(x)
         pred, mask, mean = self.decode(z)
 
+        mse = ((pred-x)**2).flatten(start_dim=1).sum(dim=1)
+        logger.update(val_mse=mse.mean().item())
+
         imgs = x[:6].cpu().detach()
         # (B, 1, 3, H, W)
         imgs = imgs[:, None]
@@ -245,10 +248,12 @@ class IODINE(nn.Module):
         elbo = log_likelihood - kl
         # elbo = log_likelihood
         pred = torch.sum(self.mask * self.mean, dim=1)
+        mse = ((pred-x)**2).flatten(start_dim=1).sum(dim=1)
         logger.update(image=x[0])
         logger.update(pred=pred[0])
         logger.update(kl=kl)
         logger.update(likelihood=log_likelihood)
+        logger.update(mse=mse.mean().item())
 
         imgs = x[:6].cpu().detach()
         # (B, 1, 3, H, W)
