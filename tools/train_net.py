@@ -65,7 +65,8 @@ def train_net(cfg):
         'max_epochs': cfg.TRAIN.MAX_EPOCHS,
         'checkpoint_period': cfg.TRAIN.CHECKPOINT_PERIOD,
         'print_every': cfg.TRAIN.PRINT_EVERY,
-        'val_every': cfg.TRAIN.VAL_EVERY
+        'val_every': cfg.TRAIN.VAL_EVERY,
+        'val_num_batches': cfg.VAL.NUM_BATCHES
     }
 
     train(

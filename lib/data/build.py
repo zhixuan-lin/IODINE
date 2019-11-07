@@ -4,6 +4,8 @@ import torch
 from .clevr import CLEVR
 from .dsprite import MultiDSprites
 from .obj3d import Obj3D
+from .atari import Atari
+
 def make_dataloader(cfg, mode):
     if mode == 'train':
         batch_size = cfg.TRAIN.BATCH_SIZE
@@ -46,3 +48,5 @@ def make_dataset(cfg, mode):
         return MultiDSprites('data/DSPRITES', mode)
     elif cfg.DATASET.TRAIN == 'OBJ3D':
         return Obj3D(cfg.DATASET.DATA_DIR, mode)
+    elif cfg.DATASET.TRAIN == 'ATARI':
+        return Atari(cfg.DATASET.DATA_DIR, mode)

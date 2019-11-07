@@ -28,8 +28,9 @@ def train(
     # get parameters
     max_epochs = params.get('max_epochs')
     print_every = params.get('print_every', 100)
-    # val_every = params.get('val_every', 100)
+    val_every = params.get('val_every', 100)
     checkpoint_period = params.get('checkpoint_period')
+    val_num_batches = params.get('val_num_batches')
 
     # start from where we left
     start_epoch = 0
@@ -42,7 +43,6 @@ def train(
 
     print('Start training')
     for epoch in range(start_epoch, max_epochs):
-        epoch = epoch + 1
 
         for idx, data in enumerate(dataloader):
             model.train()
@@ -102,22 +102,25 @@ def train(
                     tensorboard.update(**tb_data)
                     tensorboard.add('train', global_iter)
 
-                with torch.no_grad():
-                    model.eval()
-                    data = next(iter(dataloader_val))
-                    data = data[0]
-                    data = data.to(device)
-                    model(data)
+            if idx % val_every == 0:
+                model.eval()
+                for val_batch_idx, val_data in enumerate(dataloader_val):
+                    val_data = val_data[0]
+                    val_data = val_data.to(device)
+                    model(val_data)
 
-                    # tensorboard
-                    tb_data = getter.get_tensorboard_data()
-                    if not tensorboard is None:
-                        tensorboard.update(var=model.sigma)
-                        tensorboard.update(loss=meters['loss'].median)
-                        tensorboard.update(time_per_iteration=meters['batch_time'].global_avg / batch_size)
-                        tensorboard.update(med_time_per_iteration=meters['batch_time'].median / batch_size)
-                        tensorboard.update(**tb_data)
-                        tensorboard.add('valid', global_iter)
+                    if val_batch_idx + 1 >= val_num_batches:
+                        break
+
+                # tensorboard
+                tb_data = getter.get_tensorboard_data()
+                if not tensorboard is None:
+                    tensorboard.update(var=model.sigma)
+                    tensorboard.update(loss=meters['loss'].median)
+                    tensorboard.update(time_per_iteration=meters['batch_time'].global_avg / batch_size)
+                    tensorboard.update(med_time_per_iteration=meters['batch_time'].median / batch_size)
+                    tensorboard.update(**tb_data)
+                    tensorboard.add('valid', global_iter)
 
             # checkpoint
             if (idx + 1) % checkpoint_period == 0 and checkpointer is not None:

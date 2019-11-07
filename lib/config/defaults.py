@@ -148,6 +148,7 @@ _C.VAL = CN()
 # validation on?
 _C.VAL.IS_ON = False
 _C.VAL.BATCH_SIZE = 1
+_C.VAL.NUM_BATCHES = 1
 _C.VAL.EVALUATOR = ''
 
 
@@ -176,6 +177,7 @@ _C.TENSORBOARD.LOG_DIR = os.path.join(_C.PATH.ROOT_DIR, "logs")
 # default model saving directory
 _C.MODEL_DIR = os.path.join(_C.PATH.DATA_DIR, "model")
 _C.GETTER = 'VAE'
+_C.IMAGE_DIR = '/tmp'
 
 
 # ---------------------------------------------------------------------------- #
