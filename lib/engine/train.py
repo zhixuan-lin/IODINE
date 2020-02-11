@@ -102,15 +102,20 @@ def train(
                     tensorboard.update(**tb_data)
                     tensorboard.add('train', global_iter)
 
-            if idx % val_every == 0:
-                model.eval()
-                for val_batch_idx, val_data in enumerate(dataloader_val):
-                    val_data = val_data[0]
-                    val_data = val_data.to(device)
-                    model(val_data)
+            #if idx % val_every == 0:
+            #    model.eval()
+            #    for val_batch_idx, val_data in enumerate(dataloader_val):
+            #        val_data = val_data[0]
+            #        val_data = val_data.to(device)
+            #        model(val_data)
 
-                    if val_batch_idx + 1 >= val_num_batches:
-                        break
+            #        if val_batch_idx + 1 >= val_num_batches:
+            #            break
+                model.eval()
+                data = next(iter(dataloader_val))
+                data = data[0]
+                data = data.to(device)
+                model(data)
 
                 # tensorboard
                 tb_data = getter.get_tensorboard_data()
