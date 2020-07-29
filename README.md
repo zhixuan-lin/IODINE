@@ -1,6 +1,6 @@
 # IODINE
 
-A Pytorch implementation of the paper [Multi-Object Representation Learning with Iterative Variational Inference](https://arxiv.org/abs/1903.00450). 
+This is an attempt to implement the IODINE model described in [Multi-Object Representation Learning with Iterative Variational Inference](https://arxiv.org/abs/1903.00450). 
 
 The model is trained and tested on the CLEVR6 and multi-dsprites datasets. 
 
